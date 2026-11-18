@@ -4,27 +4,47 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { loginSchema } from '@/lib/validations/auth'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]       = useState<string | null>(null)
+  const [errors, setErrors]     = useState<Record<string, string>>({})
+  const [serverError, setServerError] = useState<string | null>(null)
   const [loading, setLoading]   = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setError(null)
+    setErrors({})
+    setServerError(null)
 
+    // ✅ RÈGLE AGENTS.md : Validation Zod AVANT la logique métier
+    const result = loginSchema.safeParse({ email, password })
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {}
+      result.error.errors.forEach(err => {
+        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message
+      })
+      setErrors(fieldErrors)
+      setLoading(false)
+      return
+    }
+
+    // ✅ Données validées — appel Supabase avec les données propres
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({
+      email:    result.data.email,
+      password: result.data.password,
+    })
 
     if (error) {
-      setError(
+      // ✅ RÈGLE AGENTS.md : Message générique — ne pas révéler d'infos internes
+      setServerError(
         error.message === 'Invalid login credentials'
           ? 'Email ou mot de passe incorrect.'
-          : error.message
+          : 'Une erreur est survenue. Veuillez réessayer.'
       )
       setLoading(false)
       return
@@ -55,7 +75,7 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4" noValidate>
           {/* Email */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -65,12 +85,16 @@ export default function LoginPage() {
               id="email"
               type="email"
               autoComplete="email"
-              required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="vous@exemple.com"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition ${
+                errors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.email && (
+              <p className="text-red-600 text-xs mt-1">{errors.email}</p>
+            )}
           </div>
 
           {/* Mot de passe */}
@@ -82,19 +106,23 @@ export default function LoginPage() {
               id="password"
               type="password"
               autoComplete="current-password"
-              required
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition ${
+                errors.password ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.password && (
+              <p className="text-red-600 text-xs mt-1">{errors.password}</p>
+            )}
           </div>
 
-          {/* Message d'erreur */}
-          {error && (
+          {/* Erreur serveur */}
+          {serverError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
               <span>⚠️</span>
-              <span>{error}</span>
+              <span>{serverError}</span>
             </div>
           )}
 

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { registerSchema } from '@/lib/validations/auth'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -11,66 +12,77 @@ export default function RegisterPage() {
   const [companyName, setCompanyName] = useState('')
   const [email, setEmail]             = useState('')
   const [password, setPassword]       = useState('')
-  const [error, setError]             = useState<string | null>(null)
+  const [errors, setErrors]           = useState<Record<string, string>>({})
+  const [serverError, setServerError] = useState<string | null>(null)
   const [loading, setLoading]         = useState(false)
   const [step, setStep]               = useState<'form' | 'check-email'>('form')
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setError(null)
+    setErrors({})
+    setServerError(null)
 
-    if (password.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.')
+    // ✅ RÈGLE AGENTS.md : Validation Zod AVANT la logique métier
+    const result = registerSchema.safeParse({ fullName, companyName, email, password })
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {}
+      result.error.errors.forEach(err => {
+        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message
+      })
+      setErrors(fieldErrors)
       setLoading(false)
       return
     }
 
     const supabase = createClient()
 
-    // Étape 1 : Créer le compte Supabase Auth
+    // Étape 1 : Créer le compte Supabase Auth avec données validées
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
+      email:    result.data.email,
+      password: result.data.password,
       options: {
-        data: { full_name: fullName }, // Métadonnées du compte
+        data: { full_name: result.data.fullName },
       },
     })
 
     if (signUpError) {
-      setError(signUpError.message)
+      // ✅ RÈGLE AGENTS.md : Ne pas exposer les erreurs internes brutes
+      setServerError(
+        signUpError.message.includes('already registered')
+          ? 'Un compte existe déjà avec cet email.'
+          : 'Erreur lors de la création du compte. Veuillez réessayer.'
+      )
       setLoading(false)
       return
     }
 
-    // Étape 2 : Si la session est disponible (email confirmation désactivée)
+    // Étape 2 : Créer l'entreprise et le profil (via fonction SQL SECURITY DEFINER)
     if (data.session) {
       const { data: rpcData, error: rpcError } = await supabase.rpc(
         'create_company_and_profile',
         {
-          p_full_name:    fullName,
-          p_company_name: companyName,
+          p_full_name:    result.data.fullName,
+          p_company_name: result.data.companyName,
         }
       )
 
       if (rpcError) {
-        setError('Erreur lors de la création de votre entreprise : ' + rpcError.message)
+        setServerError('Erreur lors de la création de votre entreprise. Veuillez réessayer.')
         setLoading(false)
         return
       }
 
-      const result = rpcData as { success: boolean; error?: string }
-      if (!result.success) {
-        setError(result.error || 'Une erreur est survenue.')
+      const rpcResult = rpcData as { success: boolean; error?: string }
+      if (!rpcResult.success) {
+        setServerError('Votre compte a été créé mais l\'entreprise n\'a pas pu être initialisée. Contactez le support.')
         setLoading(false)
         return
       }
 
-      // Succès → tableau de bord
       router.push('/dashboard')
       router.refresh()
     } else {
-      // Email de confirmation envoyé
       setStep('check-email')
       setLoading(false)
     }
@@ -87,10 +99,7 @@ export default function RegisterPage() {
             Un email de confirmation a été envoyé à <strong>{email}</strong>.
             <br />Cliquez sur le lien pour activer votre compte.
           </p>
-          <Link
-            href="/login"
-            className="text-blue-700 font-semibold hover:underline text-sm"
-          >
+          <Link href="/login" className="text-blue-700 font-semibold hover:underline text-sm">
             ← Retour à la connexion
           </Link>
         </div>
@@ -119,7 +128,8 @@ export default function RegisterPage() {
           </Link>
         </p>
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-4" noValidate>
+
           {/* Nom complet */}
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -129,12 +139,14 @@ export default function RegisterPage() {
               id="fullName"
               type="text"
               autoComplete="name"
-              required
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               placeholder="ex : Kofi Mensah"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition ${
+                errors.fullName ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.fullName && <p className="text-red-600 text-xs mt-1">{errors.fullName}</p>}
           </div>
 
           {/* Nom de l'entreprise */}
@@ -145,12 +157,14 @@ export default function RegisterPage() {
             <input
               id="companyName"
               type="text"
-              required
               value={companyName}
               onChange={e => setCompanyName(e.target.value)}
               placeholder="ex : Livraison Express Lomé"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition ${
+                errors.companyName ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.companyName && <p className="text-red-600 text-xs mt-1">{errors.companyName}</p>}
           </div>
 
           {/* Email */}
@@ -162,38 +176,41 @@ export default function RegisterPage() {
               id="email"
               type="email"
               autoComplete="email"
-              required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="vous@exemple.com"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition ${
+                errors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
           </div>
 
           {/* Mot de passe */}
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Mot de passe
-              <span className="text-gray-400 font-normal ml-1">(8 caractères min.)</span>
+              <span className="text-gray-400 font-normal ml-1">(8 car. min., 1 majuscule, 1 chiffre)</span>
             </label>
             <input
               id="password"
               type="password"
               autoComplete="new-password"
-              required
-              minLength={8}
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition"
+              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition ${
+                errors.password ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
             />
+            {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
           </div>
 
-          {/* Message d'erreur */}
-          {error && (
+          {/* Erreur serveur */}
+          {serverError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
               <span>⚠️</span>
-              <span>{error}</span>
+              <span>{serverError}</span>
             </div>
           )}
 
