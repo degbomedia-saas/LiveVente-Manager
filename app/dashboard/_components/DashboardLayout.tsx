@@ -41,8 +41,11 @@ function TopNav({ userName, companyName }: { userName: string; companyName: stri
 
           {/* Navigation desktop */}
           <nav className="hidden md:flex items-center gap-1">
-            <Link href="/dashboard" className="px-4 py-2 text-sm font-medium text-blue-800 bg-blue-50 rounded-lg">
-              🏠 Tableau de bord
+            <Link href="/dashboard" className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition">
+              🏠 Accueil
+            </Link>
+            <Link href="/dashboard/clients" className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition">
+              👥 Clients
             </Link>
             <Link href="/dashboard/orders" className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition">
               📦 Commandes
@@ -90,15 +93,19 @@ function TopNav({ userName, companyName }: { userName: string; companyName: stri
       {/* Navigation mobile (bas de page) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-30">
         <div className="flex items-center justify-around py-2">
-          <Link href="/dashboard" className="flex flex-col items-center gap-1 px-4 py-2 text-blue-800">
+          <Link href="/dashboard" className="flex flex-col items-center gap-1 px-3 py-2 text-gray-500">
             <span className="text-xl">🏠</span>
-            <span className="text-xs font-medium">Accueil</span>
+            <span className="text-xs">Accueil</span>
           </Link>
-          <Link href="/dashboard/orders" className="flex flex-col items-center gap-1 px-4 py-2 text-gray-500">
+          <Link href="/dashboard/clients" className="flex flex-col items-center gap-1 px-3 py-2 text-gray-500">
+            <span className="text-xl">👥</span>
+            <span className="text-xs">Clients</span>
+          </Link>
+          <Link href="/dashboard/orders" className="flex flex-col items-center gap-1 px-3 py-2 text-gray-500">
             <span className="text-xl">📦</span>
             <span className="text-xs">Commandes</span>
           </Link>
-          <Link href="/dashboard/deliveries" className="flex flex-col items-center gap-1 px-4 py-2 text-gray-500">
+          <Link href="/dashboard/deliveries" className="flex flex-col items-center gap-1 px-3 py-2 text-gray-500">
             <span className="text-xl">🚚</span>
             <span className="text-xs">Livraisons</span>
           </Link>
