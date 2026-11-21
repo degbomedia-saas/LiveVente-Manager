@@ -46,7 +46,8 @@ function TopNavContent({
   themePalette?: ThemePalette | null
 }) {
   const isCourier = userRole === 'courier'
-  const isOwner = userRole === 'owner'
+  const isSuperAdmin = userRole === 'super_admin'
+  const isOwner = userRole === 'owner' || isSuperAdmin
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -177,6 +178,15 @@ function TopNavContent({
           {/* Section Droite : Menu Déroulant Gestion + Profil */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Menu déroulant GESTION (Secondaire / Données) */}
+            {isSuperAdmin && (
+              <Link
+                href="/super-admin"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-900 text-emerald-300 hover:bg-slate-800 border border-emerald-500/30 shadow-xs transition"
+              >
+                <span>⚡ Panneau Super Admin</span>
+              </Link>
+            )}
+
             {!isCourier && (
               <div className="relative" ref={gestionRef}>
                 <button

@@ -68,7 +68,12 @@ export default function LoginPage() {
             .eq('id', data.user.id)
             .maybeSingle()
 
-          if (profile?.role === 'courier' || data.user.user_metadata?.role === 'courier') {
+          if (profile?.role === 'super_admin') {
+            destination = '/super-admin'
+          } else if (
+            profile?.role === 'courier' ||
+            data.user.user_metadata?.role === 'courier'
+          ) {
             destination = '/mes-livraisons'
           }
         } catch (profileErr) {
