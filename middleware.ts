@@ -9,6 +9,19 @@ import { NextResponse, type NextRequest } from 'next/server'
  * - Utilisateur connecté sur /login ou /register → redirigé vers /dashboard
  */
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Si on est sur la page d'accueil ou les pages publiques, ne JAMAIS rediriger vers /login
+  if (
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/first-login') ||
+    pathname.startsWith('/api')
+  ) {
+    return NextResponse.next()
+  }
+
   let supabaseResponse = NextResponse.next({ request })
   const isDev = process.env.NODE_ENV !== 'production'
 
@@ -43,7 +56,6 @@ export async function middleware(request: NextRequest) {
   // ⚠️ Ne JAMAIS utiliser getSession() ici — utiliser getUser() pour sécurité
   const { data: { user } } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
   const isAuthPage =
     pathname === '/login' ||
     pathname === '/register' ||
