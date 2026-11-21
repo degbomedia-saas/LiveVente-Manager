@@ -22,6 +22,10 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { ThemePalette } from '@/lib/supabase/ensure-profile'
+import type { SubscriptionStatus, SubscriptionSummary } from '@/types/database.types'
+import { SubscriptionBadge } from '@/components/dashboard/SubscriptionBadge'
+import { TrialAlertBanner } from '@/components/dashboard/TrialAlertBanner'
+import { UpgradeModal } from '@/components/dashboard/UpgradeModal'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -38,12 +42,16 @@ function TopNavContent({
   userRole,
   logoUrl,
   themePalette,
+  subscription,
+  onOpenUpgrade,
 }: {
   userName: string
   companyName: string
   userRole?: string
   logoUrl?: string | null
   themePalette?: ThemePalette | null
+  subscription?: SubscriptionSummary | null
+  onOpenUpgrade?: () => void
 }) {
   const isCourier = userRole === 'courier'
   const isSuperAdmin = userRole === 'super_admin'
@@ -178,6 +186,15 @@ function TopNavContent({
           {/* Section Droite : Menu Déroulant Gestion + Profil */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Menu déroulant GESTION (Secondaire / Données) */}
+            {!isCourier && subscription && onOpenUpgrade && (
+              <SubscriptionBadge
+                status={subscription.status}
+                trialEndsAt={subscription.trial_ends_at}
+                currentPeriodEndsAt={subscription.current_period_ends_at}
+                onClick={onOpenUpgrade}
+              />
+            )}
+
             {isSuperAdmin && (
               <Link
                 href="/super-admin"
@@ -480,6 +497,8 @@ function TopNav(props: {
   userRole?: string
   logoUrl?: string | null
   themePalette?: ThemePalette | null
+  subscription?: SubscriptionSummary | null
+  onOpenUpgrade?: () => void
 }) {
   return (
     <Suspense fallback={<div className="h-16 bg-white border-b border-gray-200/80" />}>
@@ -496,6 +515,57 @@ export default function DashboardLayout({
   logoUrl,
   themePalette,
 }: DashboardLayoutProps) {
+  const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+
+  useEffect(() => {
+    if (userRole === 'courier') return
+    let cancelled = false
+
+    async function loadSubscription() {
+      try {
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (!profile?.company_id) return
+
+        const { data: sub, error } = await supabase
+          .from('subscriptions')
+          .select(
+            'status, plan_type, trial_ends_at, current_period_ends_at, monthly_price'
+          )
+          .eq('company_id', profile.company_id)
+          .maybeSingle()
+
+        if (!cancelled && !error && sub) {
+          setSubscription({
+            status: sub.status as SubscriptionStatus,
+            plan_type: sub.plan_type as SubscriptionSummary['plan_type'],
+            trial_ends_at: sub.trial_ends_at,
+            current_period_ends_at: sub.current_period_ends_at,
+            monthly_price: sub.monthly_price ?? 15000,
+          })
+        }
+      } catch {
+        // Ignorer silencieusement si la table subscriptions n'est pas encore disponible
+      }
+    }
+
+    loadSubscription()
+    return () => {
+      cancelled = true
+    }
+  }, [userRole])
+
   return (
     <div
       data-theme={themePalette ?? 'indigo'}
@@ -507,10 +577,29 @@ export default function DashboardLayout({
         userRole={userRole}
         logoUrl={logoUrl}
         themePalette={themePalette}
+        subscription={subscription}
+        onOpenUpgrade={() => setUpgradeOpen(true)}
       />
+
+      {userRole !== 'courier' && subscription && (
+        <TrialAlertBanner
+          status={subscription.status}
+          trialEndsAt={subscription.trial_ends_at}
+          currentPeriodEndsAt={subscription.current_period_ends_at}
+          onOpenUpgrade={() => setUpgradeOpen(true)}
+        />
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
         {children}
       </main>
+
+      <UpgradeModal
+        isOpen={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        companyName={companyName}
+        monthlyPrice={subscription?.monthly_price ?? 15000}
+      />
     </div>
   )
 }

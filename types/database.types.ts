@@ -51,3 +51,12 @@ export interface SubscriptionRow {
   created_at: string
   updated_at: string
 }
+
+export type SubscriptionSummary = Pick<
+  SubscriptionRow,
+  | 'status'
+  | 'plan_type'
+  | 'trial_ends_at'
+  | 'current_period_ends_at'
+  | 'monthly_price'
+>
