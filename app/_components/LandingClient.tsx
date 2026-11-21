@@ -26,18 +26,24 @@ const LIVE_NOTIFICATIONS = [
     id: 1,
     title: 'Nouvelle commande • Tokoin',
     amount: '15 000 F CFA (Payé)',
+    channel: 'T-Money',
+    channelClass: 'bg-[#713F12] text-[#FDE047] border-[#EAB308]/50',
     courier: 'Koffi M. assigné',
   },
   {
     id: 2,
     title: 'Nouvelle commande • Agoè',
-    amount: '24 500 F CFA (T-Money)',
-    courier: 'En préparation',
+    amount: '24 500 F CFA (Validé)',
+    channel: 'Flooz',
+    channelClass: 'bg-[#1E3A8A] text-[#93C5FD] border-[#2563EB]/50',
+    courier: 'En route',
   },
   {
     id: 3,
     title: 'Livraison validée • Bè-Klikamé',
     amount: '18 000 F CFA (Encaissé)',
+    channel: 'Espèces',
+    channelClass: 'bg-[#064E3B] text-[#6EE7B7] border-[#059669]/50',
     courier: 'Preuve photo reçue',
   },
 ]
@@ -62,7 +68,7 @@ function GlowCard({
       onMouseLeave={() => setHovered(false)}
       whileHover={{ y: -4 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`group relative rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-6 overflow-hidden transition-colors hover:border-emerald-400/30 ${className}`}
+      className={`group relative rounded-2xl border border-[#1E293B] bg-[#131C31]/85 backdrop-blur-md p-6 overflow-hidden transition-colors hover:border-[#10B981]/40 ${className}`}
     >
       <div
         className="pointer-events-none absolute -inset-px rounded-2xl transition-opacity duration-300"
@@ -207,7 +213,7 @@ export function LandingClient() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen bg-slate-950 text-slate-50 relative overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-200">
+      <div className="min-h-screen bg-[#0B1120] text-[#F8FAFC] relative overflow-hidden selection:bg-[#10B981]/30 selection:text-[#6EE7B7]">
         {/* Arrière-plan Dark Tech : Grille subtile + Orbes animées */}
         <div
           aria-hidden="true"
@@ -248,7 +254,7 @@ export function LandingClient() {
         </div>
 
         {/* Navigation */}
-        <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl">
+        <header className="sticky top-0 z-40 border-b border-[#1E293B] bg-[#0B132B]/90 backdrop-blur-xl">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
             <Link href="/" className="shrink-0">
               <KabaKabaLogo className="h-8 sm:h-9 w-auto" />
@@ -491,9 +497,16 @@ export function LandingClient() {
                               </p>
                             </div>
                           </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-200 shrink-0">
-                            {activeNotif.courier}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${activeNotif.channelClass}`}
+                            >
+                              {activeNotif.channel}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[#F8FAFC]">
+                              {activeNotif.courier}
+                            </span>
+                          </div>
                         </motion.div>
                       </AnimatePresence>
                     </div>

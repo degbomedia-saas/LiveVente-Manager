@@ -70,3 +70,127 @@ body {
   background: var(--primary-soft);
   color: var(--primary-soft-text);
 }
+
+/* ============================================================================
+   Kaba Kaba Design System — Tokens de marque, surfaces & badges opérationnels
+   ============================================================================ */
+:root {
+  --brand-navy: #0b132b;
+  --brand-emerald: #10b981;
+  --brand-cyan: #0284c7;
+  --surface: #ffffff;
+  --border-subtle: #e2e8f0;
+  --text-secondary: #64748b;
+}
+
+.dark,
+[data-color-mode="dark"] {
+  --background: #0b1120;
+  --foreground: #f8fafc;
+  --surface: #131c31;
+  --border-subtle: #1e293b;
+  --text-secondary: #94a3b8;
+}
+
+/* Style standard d'un badge de statut dans le tableau des commandes */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+/* Canaux d'encaissement */
+.badge-cash {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+.dark .badge-cash {
+  background-color: #064e3b;
+  color: #6ee7b7;
+  border-color: #059669;
+}
+
+.badge-tmoney {
+  background-color: #fefce8;
+  color: #854d0e;
+  border-color: #fde047;
+}
+.dark .badge-tmoney {
+  background-color: #713f12;
+  color: #fde047;
+  border-color: #eab308;
+}
+
+.badge-flooz {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+.dark .badge-flooz {
+  background-color: #1e3a8a;
+  color: #93c5fd;
+  border-color: #2563eb;
+}
+
+/* Statuts opérationnels & rapprochement de caisse */
+.badge-pending {
+  background-color: #fffbeb;
+  color: #b45309;
+  border-color: #b45309;
+}
+.dark .badge-pending {
+  background-color: rgba(69, 26, 3, 0.4);
+  color: #fcd34d;
+  border-color: #fcd34d;
+}
+
+.badge-en-route {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border-color: #0369a1;
+}
+.dark .badge-en-route {
+  background-color: rgba(8, 47, 73, 0.4);
+  color: #7dd3fc;
+  border-color: #7dd3fc;
+}
+
+.badge-delivered {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border-color: #15803d;
+}
+.dark .badge-delivered {
+  background-color: rgba(5, 46, 22, 0.4);
+  color: #86efac;
+  border-color: #86efac;
+}
+
+.badge-discrepancy {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.dark .badge-discrepancy {
+  background-color: rgba(69, 10, 10, 0.4);
+  color: #fca5a5;
+  border-color: #ef4444;
+}
+
+.badge-credit {
+  background-color: #faf5ff;
+  color: #6b21a8;
+  border-color: #6b21a8;
+}
+.dark .badge-credit {
+  background-color: rgba(59, 7, 100, 0.4);
+  color: #d8b4fe;
+  border-color: #d8b4fe;
+}

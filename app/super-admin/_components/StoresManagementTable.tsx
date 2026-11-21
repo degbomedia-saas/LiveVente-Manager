@@ -47,7 +47,8 @@ function getEffectiveState(store: SuperAdminStoreRow) {
     return {
       key: 'active' as const,
       label: 'Actif',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      badgeClass: 'badge-status badge-delivered',
+      dotClass: 'bg-[#22C55E]',
       dueDate: store.currentPeriodEndsAt ?? store.trialEndsAt,
     }
   }
@@ -57,7 +58,8 @@ function getEffectiveState(store: SuperAdminStoreRow) {
     return {
       key: 'trialing' as const,
       label: `Essai (J-${daysLeft})`,
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+      badgeClass: 'badge-status badge-pending',
+      dotClass: 'bg-[#F59E0B]',
       dueDate: store.trialEndsAt,
     }
   }
@@ -65,7 +67,8 @@ function getEffectiveState(store: SuperAdminStoreRow) {
   return {
     key: 'expired' as const,
     label: 'Expiré',
-    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+    badgeClass: 'badge-status badge-discrepancy',
+    dotClass: 'bg-[#EF4444]',
     dueDate: store.currentPeriodEndsAt ?? store.trialEndsAt,
   }
 }
@@ -282,14 +285,13 @@ export function StoresManagementTable({
                       </td>
 
                       <td className="py-4 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${state.badgeClass}`}
-                        >
+                        <span className={state.badgeClass}>
+                          <span className={`h-2 w-2 rounded-full ${state.dotClass}`} />
                           {state.label}
                         </span>
                       </td>
 
-                      <td className="py-4 px-4 text-slate-700 tabular-nums">
+                      <td className="py-4 px-4 text-[#0F172A] tabular-nums">
                         {formatDateFr(state.dueDate)}
                       </td>
 
@@ -299,7 +301,7 @@ export function StoresManagementTable({
                             type="button"
                             disabled={isRowPending}
                             onClick={() => handleExtend(store)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#10B981] text-white hover:bg-[#059669] disabled:opacity-50 transition-colors"
                           >
                             <CalendarPlus className="h-3.5 w-3.5" />
                             +30 jours
@@ -316,8 +318,8 @@ export function StoresManagementTable({
                             }
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50 transition-colors ${
                               isSuspended
-                                ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'
-                                : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
+                                ? 'bg-[#0B132B] text-white border-[#0B132B] hover:bg-[#131C31]'
+                                : 'bg-white text-[#B91C1C] border-[#FECACA] hover:bg-[#FEF2F2]'
                             }`}
                           >
                             {isSuspended ? (
@@ -339,7 +341,7 @@ export function StoresManagementTable({
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Envoyer un message WhatsApp"
-                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-[#0284C7]/25 bg-[#F0F9FF] text-[#0284C7] hover:bg-[#E0F2FE] transition-colors"
                             >
                               <MessageCircle className="h-4 w-4" />
                             </a>
@@ -372,9 +374,8 @@ export function StoresManagementTable({
                         {store.ownerName} · {store.ordersCount} colis
                       </p>
                     </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border shrink-0 ${state.badgeClass}`}
-                    >
+                    <span className={`${state.badgeClass} shrink-0`}>
+                      <span className={`h-2 w-2 rounded-full ${state.dotClass}`} />
                       {state.label}
                     </span>
                   </div>
