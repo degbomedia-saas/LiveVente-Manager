@@ -9,221 +9,102 @@ import {
   useReducedMotion,
 } from 'framer-motion'
 import {
+  AlertCircle,
   ArrowRight,
+  Bike,
   Check,
   CheckCircle2,
   MapPin,
+  MessageCircle,
+  PhoneOff,
   ShieldCheck,
   Sparkles,
-  TrendingUp,
-  Truck,
-  Zap,
+  Wallet,
 } from 'lucide-react'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
 
-const LIVE_NOTIFICATIONS = [
+const DEMO_STEPS = [
   {
-    id: 1,
-    title: 'Nouvelle commande • Tokoin',
-    amount: '15 000 F CFA (Payé)',
-    channel: 'T-Money',
-    channelClass: 'bg-[#713F12] text-[#FDE047] border-[#EAB308]/50',
-    courier: 'Koffi M. assigné',
+    step: '1 / 3',
+    title: 'Commande WhatsApp saisie',
+    detail: 'Robe Wax Royale • 15 000 FCFA',
+    badge: 'À confirmer',
+    badgeClass: 'bg-[#451A03]/60 text-[#FCD34D] border-[#F59E0B]/50',
   },
   {
-    id: 2,
-    title: 'Nouvelle commande • Agoè',
-    amount: '24 500 F CFA (Validé)',
-    channel: 'Flooz',
-    channelClass: 'bg-[#1E3A8A] text-[#93C5FD] border-[#2563EB]/50',
-    courier: 'En route',
+    step: '2 / 3',
+    title: 'Repère local & paiement',
+    detail: 'Face pharmacie Nation, Tokoin',
+    badge: 'T-Money • Payé',
+    badgeClass: 'bg-[#713F12] text-[#FDE047] border-[#EAB308]/50',
   },
   {
-    id: 3,
-    title: 'Livraison validée • Bè-Klikamé',
-    amount: '18 000 F CFA (Encaissé)',
-    channel: 'Espèces',
-    channelClass: 'bg-[#064E3B] text-[#6EE7B7] border-[#059669]/50',
-    courier: 'Preuve photo reçue',
+    step: '3 / 3',
+    title: 'Livreur assigné en 1 clic',
+    detail: 'Koffi M. en route • Recette sécurisée',
+    badge: 'En route ✓',
+    badgeClass: 'bg-[#082F49]/70 text-[#7DD3FC] border-[#0EA5E9]/50',
   },
 ]
 
-function GlowCard({
-  children,
-  className = '',
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const [hovered, setHovered] = useState(false)
-
-  return (
-    <motion.div
-      onMouseMove={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect()
-        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      whileHover={{ y: -4 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`group relative rounded-2xl border border-[#1E293B] bg-[#131C31]/85 backdrop-blur-md p-6 overflow-hidden transition-colors hover:border-[#10B981]/40 ${className}`}
-    >
-      <div
-        className="pointer-events-none absolute -inset-px rounded-2xl transition-opacity duration-300"
-        style={{
-          opacity: hovered ? 1 : 0,
-          background: `radial-gradient(360px circle at ${mousePos.x}px ${mousePos.y}px, rgba(16, 185, 129, 0.16), rgba(6, 182, 212, 0.08) 40%, transparent 75%)`,
-        }}
-      />
-      <div className="relative z-10 h-full flex flex-col">{children}</div>
-    </motion.div>
-  )
-}
-
-function ConfirmBadgeDemo() {
-  const [confirmed, setConfirmed] = useState(false)
-  const shouldReduceMotion = useReducedMotion()
-
-  useEffect(() => {
-    if (shouldReduceMotion) return
-    const timer = setInterval(() => {
-      setConfirmed((prev) => !prev)
-    }, 2400)
-    return () => clearInterval(timer)
-  }, [shouldReduceMotion])
-
-  return (
-    <div className="mt-5 rounded-xl bg-slate-900/90 border border-white/10 p-3.5 space-y-2.5">
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>Robe Wax Royale • Afi K.</span>
-        <span className="font-mono text-slate-300">#KK-409</span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-300">
-          Taille :{' '}
-          <strong className="text-white">
-            {confirmed ? 'L (Confirmée)' : 'En attente...'}
-          </strong>
-        </span>
-        <motion.span
-          key={confirmed ? 'ok' : 'wait'}
-          initial={{ scale: 0.9, opacity: 0.7 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.25 }}
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-            confirmed
-              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/40'
-              : 'bg-amber-500/15 text-amber-300 border-amber-400/40'
-          }`}
-        >
-          {confirmed ? (
-            <>
-              <CheckCircle2 className="h-3 w-3" />
-              Confirmée
-            </>
-          ) : (
-            'À confirmer'
-          )}
-        </motion.span>
-      </div>
-    </div>
-  )
-}
-
-function CourierGpsDemo() {
-  return (
-    <div className="mt-5 rounded-xl bg-slate-900/90 border border-white/10 p-3.5 relative overflow-hidden">
-      <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
-        <span className="inline-flex items-center gap-1.5 text-cyan-300 font-medium">
-          <MapPin className="h-3.5 w-3.5" />
-          Tokoin → Adidogomé
-        </span>
-        <span className="text-[11px] text-emerald-400 font-semibold">
-          En route
-        </span>
-      </div>
-      <div className="relative h-10 rounded-lg bg-slate-950/80 border border-white/5 flex items-center px-4 overflow-hidden">
-        <div className="w-full h-0.5 bg-gradient-to-r from-emerald-500/30 via-cyan-400/50 to-emerald-500/30 rounded-full" />
-        <motion.div
-          animate={{ x: [0, 120, 0] }}
-          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-4 flex items-center justify-center"
-        >
-          <span className="absolute h-6 w-6 rounded-full bg-cyan-400/30 animate-ping" />
-          <span className="relative h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-slate-950 shadow-[0_0_12px_rgba(6,182,212,0.9)]" />
-        </motion.div>
-      </div>
-    </div>
-  )
-}
-
-function CashCounterDemo() {
-  const [amount, setAmount] = useState(142500)
-  const shouldReduceMotion = useReducedMotion()
-
-  useEffect(() => {
-    if (shouldReduceMotion) return
-    const timer = setInterval(() => {
-      setAmount((prev) => (prev >= 217500 ? 142500 : prev + 15000))
-    }, 1800)
-    return () => clearInterval(timer)
-  }, [shouldReduceMotion])
-
-  return (
-    <div className="mt-5 rounded-xl bg-slate-900/90 border border-white/10 p-3.5">
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>Caisse du jour (T-Money + Cash)</span>
-        <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-      </div>
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <motion.span
-          key={amount}
-          initial={{ y: 6, opacity: 0.4 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="text-xl font-bold text-white tabular-nums tracking-tight"
-        >
-          {new Intl.NumberFormat('fr-FR').format(amount)}
-        </motion.span>
-        <span className="text-xs font-semibold text-emerald-400">FCFA</span>
-      </div>
-    </div>
-  )
-}
+const QUARTIERS = ['Déckon', 'Hedzranawoé', 'Tokoin', 'Agoè', 'Autre'] as const
 
 export function LandingClient() {
-  const [notifIndex, setNotifIndex] = useState(0)
-  const [annual, setAnnual] = useState(false)
   const shouldReduceMotion = useReducedMotion()
+  const [heroPhone, setHeroPhone] = useState('')
+  const [demoStep, setDemoStep] = useState(0)
+
+  // Formulaire VIP
+  const [brandName, setBrandName] = useState('')
+  const [quartier, setQuartier] = useState<(typeof QUARTIERS)[number]>('Déckon')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     if (shouldReduceMotion) return
-    const interval = setInterval(() => {
-      setNotifIndex((prev) => (prev + 1) % LIVE_NOTIFICATIONS.length)
-    }, 3200)
-    return () => clearInterval(interval)
+    const timer = setInterval(() => {
+      setDemoStep((prev) => (prev + 1) % DEMO_STEPS.length)
+    }, 2600)
+    return () => clearInterval(timer)
   }, [shouldReduceMotion])
 
-  const activeNotif = LIVE_NOTIFICATIONS[notifIndex]
-  const starterPrice = annual ? 7500 : 9000
-  const proPrice = annual ? 12000 : 15000
-  const enterprisePrice = annual ? 24000 : 30000
+  function handleHeroSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (heroPhone.trim()) {
+      setWhatsapp(heroPhone.trim())
+    }
+    const formEl = document.getElementById('vip-form')
+    if (formEl) {
+      formEl.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  function handleVipSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!whatsapp.trim()) return
+    setSubmitted(true)
+  }
+
+  const activeDemo = DEMO_STEPS[demoStep]
+  const whatsappConfirmUrl = `https://wa.me/22890000000?text=${encodeURIComponent(
+    `Bonjour Kaba Kaba ! Je souhaite réserver mon Accès Fondateur (2 mois gratuits).\nBoutique : ${
+      brandName.trim() || 'Non précisé'
+    }\nQuartier : ${quartier}\nMon WhatsApp : ${whatsapp.trim()}`
+  )}`
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen bg-[#0B1120] text-[#F8FAFC] relative overflow-hidden selection:bg-[#10B981]/30 selection:text-[#6EE7B7]">
-        {/* Arrière-plan Dark Tech : Grille subtile + Orbes animées */}
+        {/* Arrière-plan Dark Tech anti-reflets */}
         <div
           aria-hidden="true"
           className="pointer-events-none fixed inset-0 z-0"
         >
           <div
-            className="absolute inset-0 opacity-40"
+            className="absolute inset-0 opacity-35"
             style={{
               backgroundImage:
-                'linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)',
+                'linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)',
               backgroundSize: '48px 48px',
               maskImage:
                 'radial-gradient(ellipse 80% 60% at 50% 15%, black 40%, transparent 100%)',
@@ -231,558 +112,422 @@ export function LandingClient() {
                 'radial-gradient(ellipse 80% 60% at 50% 15%, black 40%, transparent 100%)',
             }}
           />
-
           <motion.div
             animate={
               shouldReduceMotion
                 ? undefined
-                : { scale: [1, 1.12, 1], opacity: [0.18, 0.26, 0.18] }
+                : { scale: [1, 1.1, 1], opacity: [0.16, 0.24, 0.16] }
             }
             transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-emerald-500 blur-3xl opacity-20 will-change-transform"
+            className="absolute -top-32 -left-24 h-[400px] w-[400px] rounded-full bg-[#10B981] blur-3xl opacity-20 will-change-transform"
           />
-
           <motion.div
             animate={
               shouldReduceMotion
                 ? undefined
-                : { scale: [1, 1.1, 1], x: [0, -20, 0], opacity: [0.16, 0.24, 0.16] }
+                : { scale: [1, 1.08, 1], opacity: [0.15, 0.22, 0.15] }
             }
             transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute -top-24 -right-24 h-[460px] w-[460px] rounded-full bg-cyan-500 blur-3xl opacity-20 will-change-transform"
+            className="absolute -top-24 -right-24 h-[420px] w-[420px] rounded-full bg-[#0284C7] blur-3xl opacity-20 will-change-transform"
           />
         </div>
 
-        {/* Navigation */}
+        {/* [ HEADER FIXE ] */}
         <header className="sticky top-0 z-40 border-b border-[#1E293B] bg-[#0B132B]/90 backdrop-blur-xl">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
             <Link href="/" className="shrink-0">
               <KabaKabaLogo className="h-8 sm:h-9 w-auto" />
             </Link>
 
-            <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-              <a
-                href="#features"
-                className="hover:text-emerald-400 transition-colors"
-              >
-                Fonctionnalités
-              </a>
-              <a
-                href="#pricing"
-                className="hover:text-cyan-400 transition-colors"
-              >
-                Tarifs
-              </a>
-            </nav>
-
             <div className="flex items-center gap-2.5 sm:gap-3">
               <Link
                 href="/login"
-                className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-200 hover:text-white hover:bg-white/5 transition-colors"
+                className="hidden sm:inline-flex px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
               >
-                Se connecter
+                Connexion
               </Link>
-              <Link
-                href="/register"
-                className="px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.35)] transition-all"
+              <a
+                href="#vip-form"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#10B981] hover:bg-[#059669] text-[#0B132B] shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all"
               >
-                Essai 14j gratuit
-              </Link>
+                <span>Rejoindre la liste VIP</span>
+              </a>
             </div>
           </div>
         </header>
 
         <main className="relative z-10">
-          {/* Hero Section */}
-          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-20 lg:pt-24 lg:pb-28">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-10 items-center">
-              <div className="lg:col-span-7 text-center lg:text-left">
-                {/* Badge radar pulsant */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45 }}
-                  className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 text-emerald-300 text-xs sm:text-sm font-medium mb-6"
-                >
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+          {/* [ HERO SECTION ] */}
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 sm:pt-20 sm:pb-24">
+            <div className="max-w-3xl mx-auto text-center">
+              <motion.h1
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="text-3xl sm:text-5xl lg:text-[52px] font-extrabold tracking-tight leading-[1.1] text-[#F8FAFC]"
+              >
+                Finis les trous de caisse et les{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#10B981] via-[#34D399] to-[#38BDF8]">
+                  livraisons perdues à Lomé.
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.08 }}
+                className="mt-5 text-base sm:text-lg text-[#94A3B8] leading-relaxed"
+              >
+                L&apos;application mobile conçue pour les commerçantes de mode
+                qui vendent sur WhatsApp et TikTok. Suivez vos colis, cadrez vos
+                livreurs et encaissez chaque franc sans stress.
+              </motion.p>
+
+              {/* CTA Principal : Champ WhatsApp (+228) -> Bouton Obtenir mon accès pilote */}
+              <motion.form
+                onSubmit={handleHeroSubmit}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.16 }}
+                className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl mx-auto"
+              >
+                <div className="relative flex-1">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#10B981]">
+                    +228
                   </span>
-                  <span>
-                    En direct à Lomé • La logistique nouvelle génération
-                  </span>
-                </motion.div>
-
-                <motion.h1
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, delay: 0.08 }}
-                  className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08]"
+                  <input
+                    type="tel"
+                    value={heroPhone}
+                    onChange={(e) => setHeroPhone(e.target.value)}
+                    placeholder="Numéro WhatsApp (ex: 90 12 34 56)"
+                    className="w-full pl-14 pr-4 py-3.5 rounded-2xl bg-[#131C31] border border-[#1E293B] text-sm text-[#F8FAFC] placeholder:text-[#64748B] focus:outline-none focus:border-[#10B981]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold bg-[#10B981] hover:bg-[#059669] text-[#0B132B] shadow-[0_0_28px_rgba(16,185,129,0.35)] transition-all shrink-0 cursor-pointer"
                 >
-                  Ne perdez plus jamais{' '}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-200">
-                    une vente ni un colis.
-                  </span>
-                </motion.h1>
+                  <span>Obtenir mon accès pilote</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </motion.form>
 
-                <motion.p
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, delay: 0.16 }}
-                  className="mt-6 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto lg:mx-0 leading-relaxed"
-                >
-                  Centralisez vos commandes WhatsApp, assignez vos livreurs moto
-                  en un clic et sécurisez chaque franc encaissé via T-Money,
-                  Moov ou espèces.
-                </motion.p>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, delay: 0.24 }}
-                  className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="w-full sm:w-auto"
-                  >
-                    <Link
-                      href="/register"
-                      className="group relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-4 rounded-2xl text-sm sm:text-base font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 shadow-[0_0_35px_rgba(16,185,129,0.45)] overflow-hidden"
-                    >
-                      {/* Reflet shimmer continu */}
-                      <motion.span
-                        aria-hidden="true"
-                        animate={
-                          shouldReduceMotion
-                            ? undefined
-                            : { x: ['-120%', '220%'] }
-                        }
-                        transition={{
-                          duration: 2.6,
-                          repeat: Infinity,
-                          repeatDelay: 1.2,
-                          ease: 'easeInOut',
-                        }}
-                        className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent skew-x-[-20deg]"
-                      />
-                      <span className="relative">Démarrer l&apos;essai gratuit (14j)</span>
-                      <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </Link>
-                  </motion.div>
-
-                  <Link
-                    href="/login"
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-sm sm:text-base font-semibold text-slate-200 border border-white/15 bg-white/[0.03] hover:bg-white/[0.08] transition-colors"
-                  >
-                    Accéder à ma boutique
-                  </Link>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.6, delay: 0.35 }}
-                  className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2 text-xs text-slate-400"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Sans carte bancaire
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Configuration en 2 minutes
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Espace Livreur Mobile inclus
-                  </span>
-                </motion.div>
-              </div>
-
-              {/* Maquette Flottante 3D du Dashboard */}
-              <div className="lg:col-span-5">
-                <motion.div
-                  initial={{ opacity: 0, y: 24, rotateX: 6 }}
-                  animate={
-                    shouldReduceMotion
-                      ? { opacity: 1, y: 0 }
-                      : {
-                          opacity: 1,
-                          y: [0, -8, 0],
-                        }
-                  }
-                  transition={
-                    shouldReduceMotion
-                      ? { duration: 0.5 }
-                      : {
-                          opacity: { duration: 0.6, delay: 0.2 },
-                          y: { duration: 5.5, repeat: Infinity, ease: 'easeInOut' },
-                        }
-                  }
-                  className="relative rounded-3xl border border-white/15 bg-slate-900/80 backdrop-blur-xl p-5 sm:p-6 shadow-[0_25px_80px_-15px_rgba(6,182,212,0.28)] will-change-transform"
-                >
-                  {/* Barre fenêtre */}
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
-                    </div>
-                    <span className="text-[11px] font-medium text-slate-400">
-                      dashboard.kaba-kaba.app
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      LIVE
-                    </span>
-                  </div>
-
-                  {/* Mini KPIs */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
-                      <p className="text-[11px] text-slate-400">
-                        CA Encaissé (Aujourd&apos;hui)
-                      </p>
-                      <p className="mt-1 text-lg sm:text-xl font-bold text-white tabular-nums">
-                        187 500 F
-                      </p>
-                      <span className="text-[11px] text-emerald-400 font-medium">
-                        +24% vs hier
-                      </span>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
-                      <p className="text-[11px] text-slate-400">
-                        Colis en livraison
-                      </p>
-                      <p className="mt-1 text-lg sm:text-xl font-bold text-cyan-300 tabular-nums">
-                        14 / 16
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        3 livreurs actifs
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Flux temps réel */}
-                  <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-3.5">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                        Flux commandes en direct
-                      </span>
-                      <Zap className="h-3.5 w-3.5 text-cyan-400" />
-                    </div>
-
-                    <div className="min-h-[64px] flex items-center">
-                      <AnimatePresence mode="wait">
-                        <motion.div
-                          key={activeNotif.id}
-                          initial={{ opacity: 0, x: 18 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -18 }}
-                          transition={{ duration: 0.3 }}
-                          className="w-full rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-3 flex items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="h-8 w-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
-                              <CheckCircle2 className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold text-white truncate">
-                                {activeNotif.title}
-                              </p>
-                              <p className="text-[11px] text-emerald-300 font-medium">
-                                {activeNotif.amount}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${activeNotif.channelClass}`}
-                            >
-                              {activeNotif.channel}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[#F8FAFC]">
-                              {activeNotif.courier}
-                            </span>
-                          </div>
-                        </motion.div>
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
+              {/* Preuve sociale immédiate */}
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.24 }}
+                className="mt-4 inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-medium text-[#94A3B8]"
+              >
+                <span className="h-2 w-2 rounded-full bg-[#10B981] animate-pulse" />
+                Déjà <strong className="text-[#F8FAFC]">42 boutiques</strong>{' '}
+                inscrites à Déckon, Hedzranawoé et Agoè.
+              </motion.p>
             </div>
           </section>
 
-          {/* Section Fonctionnalités Glow Hover */}
-          <section
-            id="features"
-            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 border-t border-white/10"
-          >
-            <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-cyan-400">
-                <Sparkles className="h-3.5 w-3.5" />
-                Conçu pour le terrain
+          {/* [ SECTION LA DOULEUR DU TERRAIN (3 Blocs Visuels) ] */}
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 border-t border-[#1E293B]">
+            <div className="text-center max-w-2xl mx-auto mb-10">
+              <span className="text-xs font-semibold uppercase tracking-widest text-[#0284C7]">
+                La réalité du terrain
               </span>
-              <h2 className="mt-3 text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                Zéro oubli. Zéro écart de caisse.
+              <h2 className="mt-2 text-2xl sm:text-3xl font-bold text-[#F8FAFC]">
+                Ce qui vous fait perdre de l&apos;argent chaque semaine
               </h2>
-              <p className="mt-3 text-sm sm:text-base text-slate-400">
-                Chaque étape de votre vente — de la discussion WhatsApp jusqu&apos;à
-                la remise au livreur moto — est tracée en temps réel.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <GlowCard>
-                <div className="h-10 w-10 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 flex items-center justify-center mb-4">
-                  <Zap className="h-5 w-5" />
+              <div className="rounded-2xl border border-[#1E293B] bg-[#131C31] p-6 space-y-3">
+                <div className="h-10 w-10 rounded-xl bg-[#450A0A]/60 border border-[#EF4444]/40 text-[#FCA5A5] flex items-center justify-center">
+                  <PhoneOff className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white">
-                  File &laquo; À confirmer &raquo;
+                <h3 className="text-lg font-bold text-[#F8FAFC]">
+                  Le livreur injoignable avec votre argent
                 </h3>
-                <p className="mt-2 text-sm text-slate-400 leading-relaxed flex-1">
-                  Enregistrez une commande même si la cliente hésite encore sur
-                  la taille ou le quartier. Validez en 1 clic dès qu&apos;elle
-                  répond.
+                <p className="text-sm text-[#94A3B8] leading-relaxed">
+                  Fini les allers-retours pour savoir où est passée la recette
+                  de la journée.
                 </p>
-                <ConfirmBadgeDemo />
-              </GlowCard>
+              </div>
 
-              <GlowCard>
-                <div className="h-10 w-10 rounded-xl bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 flex items-center justify-center mb-4">
-                  <Truck className="h-5 w-5" />
+              <div className="rounded-2xl border border-[#1E293B] bg-[#131C31] p-6 space-y-3">
+                <div className="h-10 w-10 rounded-xl bg-[#451A03]/60 border border-[#F59E0B]/40 text-[#FCD34D] flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white">
-                  Espace Livreur Moto
+                <h3 className="text-lg font-bold text-[#F8FAFC]">
+                  La cliente qui annule au portail
                 </h3>
-                <p className="mt-2 text-sm text-slate-400 leading-relaxed flex-1">
-                  Vos livreurs voient uniquement leurs courses du jour sur mobile,
-                  capturent la preuve photo et signalent la livraison en direct.
+                <p className="text-sm text-[#94A3B8] leading-relaxed">
+                  Système de confirmation avant envoi pour stopper les frais de
+                  course inutiles.
                 </p>
-                <CourierGpsDemo />
-              </GlowCard>
+              </div>
 
-              <GlowCard>
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 flex items-center justify-center mb-4">
-                  <ShieldCheck className="h-5 w-5" />
+              <div className="rounded-2xl border border-[#1E293B] bg-[#131C31] p-6 space-y-3">
+                <div className="h-10 w-10 rounded-xl bg-[#064E3B]/70 border border-[#10B981]/40 text-[#6EE7B7] flex items-center justify-center">
+                  <Wallet className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white">
-                  Clôture de Caisse
+                <h3 className="text-lg font-bold text-[#F8FAFC]">
+                  Le casse-tête Flooz, TMoney et Cash
                 </h3>
-                <p className="mt-2 text-sm text-slate-400 leading-relaxed flex-1">
-                  Réconciliez automatiquement le cash en main des livreurs et les
-                  paiements T-Money / Moov à la fin de chaque journée.
+                <p className="text-sm text-[#94A3B8] leading-relaxed">
+                  Séparation nette en un clic entre ce que le client paie et ce
+                  que le livreur doit vous remettre.
                 </p>
-                <CashCounterDemo />
-              </GlowCard>
+                <div className="pt-1 flex flex-wrap gap-1.5">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#064E3B] text-[#6EE7B7] border border-[#059669]/50">
+                    Espèces
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#713F12] text-[#FDE047] border border-[#EAB308]/50">
+                    T-Money
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#1E3A8A] text-[#93C5FD] border border-[#2563EB]/50">
+                    Flooz
+                  </span>
+                </div>
+              </div>
             </div>
           </section>
 
-          {/* Section Tarifs Card Highlight */}
-          <section
-            id="pricing"
-            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 border-t border-white/10"
-          >
-            <div className="text-center max-w-2xl mx-auto mb-10">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                Un tarif clair, adapté à votre croissance
-              </h2>
-              <p className="mt-3 text-sm sm:text-base text-slate-400">
-                Commencez gratuitement pendant 14 jours. Paiement simple via
-                T-Money ou Moov Money.
-              </p>
+          {/* [ SECTION DÉMO RAPIDE ] */}
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 border-t border-[#1E293B]">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-5 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-widest text-[#10B981]">
+                  Démo rapide • 3 clics
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold text-[#F8FAFC]">
+                  Enregistrez une livraison en moins de 20 secondes
+                </h2>
+                <p className="text-sm text-[#94A3B8] leading-relaxed">
+                  Ajoutez la commande reçue sur WhatsApp ou TikTok, notez le
+                  repère exact à Lomé et suivez l&apos;encaissement en direct.
+                </p>
+              </div>
 
-              {/* Switch Mensuel / Annuel */}
-              <div className="mt-7 inline-flex items-center p-1 rounded-2xl bg-white/[0.05] border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setAnnual(false)}
-                  className={`relative px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${
-                    !annual ? 'text-slate-950' : 'text-slate-300'
-                  }`}
-                >
-                  {!annual && (
-                    <motion.span
-                      layoutId="billing-pill"
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      className="absolute inset-0 rounded-xl bg-white"
-                    />
-                  )}
-                  <span className="relative z-10">Mensuel</span>
-                </button>
+              <div className="lg:col-span-7">
+                <div className="rounded-2xl border border-[#1E293B] bg-[#131C31] p-5 sm:p-6 shadow-xl">
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E293B] text-xs text-[#94A3B8]">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[#F8FAFC]">
+                      <MapPin className="h-3.5 w-3.5 text-[#0284C7]" />
+                      Face pharmacie Nation, Tokoin
+                    </span>
+                    <span className="font-mono text-[#10B981]">
+                      Étape {activeDemo.step}
+                    </span>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => setAnnual(true)}
-                  className={`relative px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${
-                    annual ? 'text-slate-950' : 'text-slate-300'
-                  }`}
-                >
-                  {annual && (
-                    <motion.span
-                      layoutId="billing-pill"
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400"
-                    />
-                  )}
-                  <span className="relative z-10">Annuel</span>
-                  <span
-                    className={`relative z-10 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                      annual
-                        ? 'bg-slate-950/20 text-slate-950'
-                        : 'bg-emerald-500/20 text-emerald-300'
-                    }`}
-                  >
-                    -20%
-                  </span>
-                </button>
+                  <div className="min-h-[86px] flex items-center">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeDemo.step}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.28 }}
+                        className="w-full rounded-xl bg-[#0B1120] border border-[#1E293B] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-lg bg-[#0284C7]/15 text-[#38BDF8] flex items-center justify-center shrink-0">
+                            <Bike className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-[#F8FAFC]">
+                              {activeDemo.title}
+                            </p>
+                            <p className="text-xs text-[#94A3B8]">
+                              {activeDemo.detail}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center self-start sm:self-center px-2.5 py-1 rounded-md text-xs font-semibold border ${activeDemo.badgeClass}`}
+                        >
+                          {activeDemo.badge}
+                        </span>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    {DEMO_STEPS.map((s, idx) => (
+                      <button
+                        key={s.step}
+                        type="button"
+                        onClick={() => setDemoStep(idx)}
+                        className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          idx === demoStep ? 'bg-[#10B981]' : 'bg-[#1E293B]'
+                        }`}
+                        aria-label={`Étape ${s.step}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
+          </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-              {/* Starter */}
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-7 flex flex-col">
-                <h3 className="text-lg font-bold text-white">Starter</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Pour les boutiques qui démarrent
-                </p>
-                <div className="mt-6 flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-white tabular-nums">
-                    {new Intl.NumberFormat('fr-FR').format(starterPrice)}
-                  </span>
-                  <span className="text-xs text-slate-400">FCFA / mois</span>
-                </div>
-                <ul className="mt-6 space-y-3 text-sm text-slate-300 flex-1">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                    Jusqu&apos;à 150 commandes / mois
+          {/* [ OFFRE FONDATEUR + FORMULAIRE DE CAPTURE MINIMAL ] */}
+          <section
+            id="vip-form"
+            className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-[#1E293B]"
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Offre Fondateur */}
+              <div className="lg:col-span-6 rounded-2xl border border-[#10B981]/35 bg-[#131C31] p-6 sm:p-8 space-y-5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#10B981]/15 text-[#6EE7B7] border border-[#10B981]/30">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  OFFRE FONDATEUR • PLACES LIMITÉES
+                </span>
+
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] leading-snug">
+                  Accès Fondateur : Gratuit pendant 2 mois pour les 50
+                  premières boutiques de Lomé.
+                </h2>
+
+                <ul className="space-y-3 text-sm text-[#F8FAFC]">
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="h-5 w-5 text-[#10B981] shrink-0 mt-0.5" />
+                    <span>
+                      Formation personnalisée dans votre boutique offerte.
+                    </span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                    1 boutique &amp; 2 livreurs
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                    Suivi T-Money / Moov / Cash
+                  <li className="flex items-start gap-2.5">
+                    <ShieldCheck className="h-5 w-5 text-[#0284C7] shrink-0 mt-0.5" />
+                    <span>
+                      Ligne directe WhatsApp avec les fondateurs pour adapter
+                      l&apos;outil à vos besoins.
+                    </span>
                   </li>
                 </ul>
-                <Link
-                  href="/register"
-                  className="mt-8 w-full inline-flex justify-center py-3 px-4 rounded-xl text-sm font-semibold border border-white/15 bg-white/[0.04] hover:bg-white/[0.1] text-white transition-colors"
-                >
-                  Commencer l&apos;essai
-                </Link>
               </div>
 
-              {/* Pro Illimité (Card Highlight avec bordure néon animée) */}
-              <div className="relative rounded-3xl p-[2px] overflow-hidden shadow-[0_0_50px_-10px_rgba(16,185,129,0.45)]">
-                <motion.div
-                  aria-hidden="true"
-                  animate={shouldReduceMotion ? undefined : { rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                  className="absolute inset-[-100%] bg-[conic-gradient(from_0deg,#10b981,#06b6d4,#14b8a6,#0f172a,#10b981)] will-change-transform"
-                />
-                <div className="relative h-full rounded-[22px] bg-slate-900/95 backdrop-blur-xl p-7 flex flex-col">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-bold text-white">
-                      Pro Illimité
+              {/* Formulaire de Capture Minimal */}
+              <div className="lg:col-span-6 rounded-2xl border border-[#1E293B] bg-[#131C31] p-6 sm:p-8">
+                {submitted ? (
+                  <div className="text-center space-y-4 py-6">
+                    <div className="h-12 w-12 rounded-full bg-[#10B981]/20 text-[#10B981] flex items-center justify-center mx-auto">
+                      <Check className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-xl font-bold text-[#F8FAFC]">
+                      Place réservée !
                     </h3>
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950">
-                      RECOMMANDÉ
-                    </span>
+                    <p className="text-sm text-[#94A3B8]">
+                      Confirmez votre demande sur WhatsApp en 1 clic pour
+                      activer vos 2 mois gratuits ou créez votre compte dès
+                      maintenant.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <a
+                        href={whatsappConfirmUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-[#10B981] hover:bg-[#059669] text-[#0B132B] transition"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        <span>Confirmer sur WhatsApp</span>
+                      </a>
+                      <Link
+                        href="/register"
+                        className="inline-flex items-center justify-center py-3 px-4 rounded-xl text-sm font-semibold border border-[#1E293B] bg-[#0B1120] hover:bg-[#1E293B] text-[#F8FAFC] transition"
+                      >
+                        Créer mon compte
+                      </Link>
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Le choix des boutiques e-commerce actives à Lomé
-                  </p>
-                  <div className="mt-6 flex items-baseline gap-1.5">
-                    <span className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-300 tabular-nums">
-                      {new Intl.NumberFormat('fr-FR').format(proPrice)}
-                    </span>
-                    <span className="text-xs text-slate-300">FCFA / mois</span>
-                  </div>
-                  <ul className="mt-6 space-y-3 text-sm text-slate-200 flex-1">
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                      Commandes &amp; colis illimités
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                      Livreurs illimités + app mobile
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                      Clôture de caisse &amp; preuves photo
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                      Personnalisation marque &amp; logo
-                    </li>
-                  </ul>
-                  <Link
-                    href="/register"
-                    className="mt-8 w-full inline-flex justify-center py-3.5 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 hover:opacity-95 shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all"
-                  >
-                    Démarrer 14 jours gratuits
-                  </Link>
-                </div>
-              </div>
+                ) : (
+                  <form onSubmit={handleVipSubmit} className="space-y-4">
+                    <div>
+                      <label
+                        htmlFor="brandName"
+                        className="block text-xs font-semibold text-[#94A3B8] mb-1.5"
+                      >
+                        Nom de la boutique / Marque
+                      </label>
+                      <input
+                        id="brandName"
+                        type="text"
+                        value={brandName}
+                        onChange={(e) => setBrandName(e.target.value)}
+                        placeholder="Ex : Élégance Wax Lomé"
+                        className="w-full px-3.5 py-3 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm text-[#F8FAFC] placeholder:text-[#64748B] focus:outline-none focus:border-[#10B981]"
+                      />
+                    </div>
 
-              {/* Entreprise */}
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-7 flex flex-col">
-                <h3 className="text-lg font-bold text-white">Entreprise</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Pour les réseaux multi-boutiques et flottes
-                </p>
-                <div className="mt-6 flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-white tabular-nums">
-                    {new Intl.NumberFormat('fr-FR').format(enterprisePrice)}
-                  </span>
-                  <span className="text-xs text-slate-400">FCFA / mois</span>
-                </div>
-                <ul className="mt-6 space-y-3 text-sm text-slate-300 flex-1">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-cyan-400 shrink-0" />
-                    Tout le forfait Pro Illimité
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-cyan-400 shrink-0" />
-                    Multi-utilisateurs &amp; rôles avancés
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-cyan-400 shrink-0" />
-                    Support prioritaire WhatsApp dédié
-                  </li>
-                </ul>
-                <Link
-                  href="/register"
-                  className="mt-8 w-full inline-flex justify-center py-3 px-4 rounded-xl text-sm font-semibold border border-white/15 bg-white/[0.04] hover:bg-white/[0.1] text-white transition-colors"
-                >
-                  Tester gratuitement
-                </Link>
+                    <div>
+                      <label
+                        htmlFor="quartier"
+                        className="block text-xs font-semibold text-[#94A3B8] mb-1.5"
+                      >
+                        Quartier
+                      </label>
+                      <select
+                        id="quartier"
+                        value={quartier}
+                        onChange={(e) =>
+                          setQuartier(
+                            e.target.value as (typeof QUARTIERS)[number]
+                          )
+                        }
+                        className="w-full px-3.5 py-3 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm text-[#F8FAFC] focus:outline-none focus:border-[#10B981]"
+                      >
+                        {QUARTIERS.map((q) => (
+                          <option key={q} value={q}>
+                            {q}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="whatsapp"
+                        className="block text-xs font-semibold text-[#94A3B8] mb-1.5"
+                      >
+                        Numéro WhatsApp (obligatoire) *
+                      </label>
+                      <input
+                        id="whatsapp"
+                        type="tel"
+                        required
+                        value={whatsapp}
+                        onChange={(e) => setWhatsapp(e.target.value)}
+                        placeholder="Ex : +228 90 12 34 56"
+                        className="w-full px-3.5 py-3 rounded-xl bg-[#0B1120] border border-[#1E293B] text-sm text-[#F8FAFC] placeholder:text-[#64748B] focus:outline-none focus:border-[#10B981]"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 px-5 rounded-xl text-sm font-bold bg-[#10B981] hover:bg-[#059669] text-[#0B132B] shadow-[0_0_24px_rgba(16,185,129,0.3)] transition cursor-pointer"
+                    >
+                      Réserver mes 2 mois gratuits
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           </section>
         </main>
 
-        {/* Footer */}
-        <footer className="relative z-10 border-t border-white/10 bg-slate-950/90 py-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        {/* [ FOOTER SIMPLE ] */}
+        <footer className="relative z-10 border-t border-[#1E293B] bg-[#0B132B] py-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#94A3B8]">
             <div className="flex items-center gap-3">
               <KabaKabaLogo className="h-7 w-auto" />
-              <span>© {new Date().getFullYear()} Kaba Kaba • Lomé, Togo</span>
+              <span>Made in Lomé pour les entrepreneurs togolais.</span>
             </div>
             <div className="flex items-center gap-5">
-              <Link href="/login" className="hover:text-white transition-colors">
+              <Link href="/login" className="hover:text-[#F8FAFC] transition">
                 Connexion
               </Link>
               <Link
                 href="/register"
-                className="hover:text-emerald-400 transition-colors"
+                className="hover:text-[#10B981] transition"
               >
-                Créer une boutique
+                Créer un compte
               </Link>
             </div>
           </div>
