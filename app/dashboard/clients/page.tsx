@@ -1,11 +1,17 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
 import DashboardLayout from '../_components/DashboardLayout'
 import ClientsView from './_components/ClientsView'
 
-export const metadata = { title: 'Clients — LiveVente Manager' }
+export const metadata = { title: 'Clients — Élégance Wax Lomé' }
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
 
   // 1. Vérification auth côté serveur (AGENTS.md)
@@ -13,18 +19,7 @@ export default async function ClientsPage() {
   if (!user) redirect('/login')
 
   // 2. Récupération du profil (rôle + company_id) — côté serveur
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, role, company_id, companies(name)')
-    .eq('id', user.id)
-    .single<{
-      full_name: string
-      role: string
-      company_id: string
-      companies: { name: string }
-    }>()
-
-  if (!profile) redirect('/login')
+  const profile = await getOrCreateProfile(supabase, user)
 
   // 3. Récupération des clients — RLS filtre automatiquement par company_id
   const { data: clients } = await supabase
@@ -40,6 +35,7 @@ export default async function ClientsPage() {
       <ClientsView
         initialClients={clients ?? []}
         userRole={profile.role}
+        initialOpenModal={params.new === '1'}
       />
     </DashboardLayout>
   )

@@ -5,8 +5,16 @@ import { createBrowserClient } from '@supabase/ssr'
  * À utiliser dans les composants React côté client.
  */
 export function createClient() {
+  const isDev = process.env.NODE_ENV !== 'production'
+
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookieOptions: {
+        secure: !isDev,
+        sameSite: 'lax',
+      },
+    }
   )
 }

@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+:root,
+[data-theme="indigo"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: hsl(226 70% 55.5%);
+  --primary-hover: hsl(226 70% 48%);
+  --primary-soft: hsl(226 100% 97%);
+  --primary-soft-text: hsl(226 70% 44%);
+  --primary-border: hsl(226 70% 85%);
+  --primary-ring: hsl(226 70% 55.5%);
+}
+
+[data-theme="emerald"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: hsl(158 64% 40%);
+  --primary-hover: hsl(158 64% 33%);
+  --primary-soft: hsl(152 76% 96%);
+  --primary-soft-text: hsl(158 64% 30%);
+  --primary-border: hsl(152 60% 80%);
+  --primary-ring: hsl(158 64% 40%);
+}
+
+[data-theme="terracotta"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: hsl(24 80% 46%);
+  --primary-hover: hsl(24 80% 38%);
+  --primary-soft: hsl(30 100% 96%);
+  --primary-soft-text: hsl(24 80% 35%);
+  --primary-border: hsl(28 80% 82%);
+  --primary-ring: hsl(24 80% 46%);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-text: var(--primary-soft-text);
+  --color-primary-border: var(--primary-border);
+  --color-primary-ring: var(--primary-ring);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus clavier discret et cohérent */
+:focus-visible {
+  outline: 2px solid var(--primary-ring);
+  outline-offset: 2px;
+}
+
+/* Défilement fluide et sobre */
+::selection {
+  background: var(--primary-soft);
+  color: var(--primary-soft-text);
 }

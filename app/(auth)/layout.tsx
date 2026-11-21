@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'LiveVente Manager — Connexion',
+  title: 'kaba kaba — Connexion',
 }
 
 export default function AuthLayout({

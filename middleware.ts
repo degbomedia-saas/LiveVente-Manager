@@ -10,11 +10,16 @@ import { NextResponse, type NextRequest } from 'next/server'
  */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+  const isDev = process.env.NODE_ENV !== 'production'
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: {
+        secure: !isDev,
+        sameSite: 'lax',
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -24,9 +29,12 @@ export async function middleware(request: NextRequest) {
             request.cookies.set(name, value)
           )
           supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const adjustedOptions = isDev
+              ? { ...options, secure: false }
+              : options
+            supabaseResponse.cookies.set(name, value, adjustedOptions)
+          })
         },
       },
     }
@@ -36,17 +44,87 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
-  const isAuthPage = pathname === '/login' || pathname === '/register'
-  const isPublicPage = isAuthPage || pathname === '/'
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password'
+  const isPublicPage =
+    isAuthPage ||
+    pathname === '/' ||
+    pathname === '/first-login' ||
+    pathname === '/reset-password' ||
+    pathname === '/update-password' ||
+    pathname.startsWith('/auth/')
 
   // Non connecté et tente d'accéder à une page protégée
   if (!user && !isPublicPage) {
+    // Mode dev / test mobile : permettre l'accès à /mes-livraisons pour le sélecteur de test
+    if (pathname === '/mes-livraisons' && isDev) {
+      return supabaseResponse
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Connecté mais sur une page d'auth → aller au dashboard
-  if (user && isAuthPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, company_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const isCourier = profile?.role === 'courier'
+    const isSuperAdmin = profile?.role === 'super_admin'
+
+    if (pathname.startsWith('/super-admin') && !isSuperAdmin) {
+      return NextResponse.redirect(
+        new URL('/dashboard?error=unauthorized', request.url)
+      )
+    }
+
+    if (isAuthPage) {
+      return NextResponse.redirect(
+        new URL(isCourier ? '/mes-livraisons' : '/dashboard', request.url)
+      )
+    }
+
+    if (
+      isCourier &&
+      (pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/commandes') ||
+        pathname.startsWith('/clients') ||
+        pathname.startsWith('/produits') ||
+        pathname.startsWith('/livreurs') ||
+        pathname.startsWith('/paiements'))
+    ) {
+      return NextResponse.redirect(new URL('/mes-livraisons', request.url))
+    }
+
+    // Vérification du statut d'abonnement de la boutique (sauf super_admin et pages publiques)
+    if (
+      !isSuperAdmin &&
+      profile?.company_id &&
+      pathname !== '/abonnement-expire' &&
+      !isPublicPage
+    ) {
+      const { data: sub, error: subError } = await supabase
+        .from('subscriptions')
+        .select('status, trial_ends_at')
+        .eq('company_id', profile.company_id)
+        .maybeSingle()
+
+      if (!subError && sub) {
+        const isTrialExpired =
+          sub.status === 'trialing' && new Date(sub.trial_ends_at) < new Date()
+        const isBlockedStatus =
+          sub.status === 'expired' ||
+          sub.status === 'canceled' ||
+          sub.status === 'past_due'
+
+        if (isTrialExpired || isBlockedStatus) {
+          return NextResponse.redirect(new URL('/abonnement-expire', request.url))
+        }
+      }
+    }
   }
 
   return supabaseResponse

@@ -122,7 +122,7 @@ CREATE TABLE public.order_items (
 CREATE INDEX idx_order_items_company  ON public.order_items(company_id);
 CREATE INDEX idx_order_items_order    ON public.order_items(order_id);
 
-COMMENT ON TABLE public.order_items IS 'Lignes d'articles par commande';
+COMMENT ON TABLE public.order_items IS 'Lignes d''articles par commande';
 
 
 -- ================================================================

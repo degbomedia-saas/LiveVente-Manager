@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { registerSchema } from '@/lib/validations/auth'
+import { formatAuthError } from '@/lib/auth-errors'
+import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -27,7 +29,7 @@ export default function RegisterPage() {
     const result = registerSchema.safeParse({ fullName, companyName, email, password })
     if (!result.success) {
       const fieldErrors: Record<string, string> = {}
-      result.error.errors.forEach(err => {
+      result.error.issues.forEach(err => {
         if (err.path[0]) fieldErrors[err.path[0] as string] = err.message
       })
       setErrors(fieldErrors)
@@ -42,17 +44,16 @@ export default function RegisterPage() {
       email:    result.data.email,
       password: result.data.password,
       options: {
-        data: { full_name: result.data.fullName },
+        data: {
+          full_name:    result.data.fullName,
+          company_name: result.data.companyName,
+        },
       },
     })
 
     if (signUpError) {
       // ✅ RÈGLE AGENTS.md : Ne pas exposer les erreurs internes brutes
-      setServerError(
-        signUpError.message.includes('already registered')
-          ? 'Un compte existe déjà avec cet email.'
-          : 'Erreur lors de la création du compte. Veuillez réessayer.'
-      )
+      setServerError(formatAuthError(signUpError.message))
       setLoading(false)
       return
     }
@@ -68,7 +69,7 @@ export default function RegisterPage() {
       )
 
       if (rpcError) {
-        setServerError('Erreur lors de la création de votre entreprise. Veuillez réessayer.')
+        setServerError(formatAuthError(rpcError.message))
         setLoading(false)
         return
       }
@@ -111,11 +112,10 @@ export default function RegisterPage() {
     <div className="w-full max-w-md">
       {/* Logo / Titre */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
-          <span className="text-3xl">🚀</span>
-        </div>
-        <h1 className="text-3xl font-bold text-white">LiveVente Manager</h1>
-        <p className="text-blue-200 mt-1">Créez votre compte gratuitement</p>
+        <KabaKabaLogo className="h-12 md:h-14 w-auto mx-auto mb-3" />
+        <p className="text-slate-300 text-sm font-medium text-center">
+          La logistique express de vos ventes et livraisons
+        </p>
       </div>
 
       {/* Carte d'inscription */}
@@ -236,8 +236,8 @@ export default function RegisterPage() {
         </form>
       </div>
 
-      <p className="text-center text-blue-200 text-xs mt-6">
-        © {new Date().getFullYear()} LiveVente Manager. Tous droits réservés.
+      <p className="text-center text-slate-300 text-xs mt-6">
+        © 2026 kaba kaba. Tous droits réservés.
       </p>
     </div>
   )

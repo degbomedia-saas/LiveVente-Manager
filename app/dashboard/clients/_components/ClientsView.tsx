@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useEffect, useState, useTransition, useMemo } from 'react'
 import { addClient, deleteClient } from '@/app/actions/clients'
 import { clientSchema } from '@/lib/validations/clients'
+import ClientDetailDrawer from './ClientDetailDrawer'
 
 interface Customer {
   id: string
@@ -16,6 +17,7 @@ interface Customer {
 interface ClientsViewProps {
   initialClients: Customer[]
   userRole: string
+  initialOpenModal?: boolean
 }
 
 // ─── Formulaire d'ajout ──────────────────────────────────────────────────────
@@ -44,7 +46,7 @@ function AddClientModal({
     const result = clientSchema.safeParse(fields)
     if (!result.success) {
       const fe: Record<string, string> = {}
-      result.error.errors.forEach(err => {
+      result.error.issues.forEach(err => {
         if (err.path[0]) fe[err.path[0] as string] = err.message
       })
       setErrors(fe)
@@ -183,10 +185,12 @@ function ClientCard({
   client,
   canDelete,
   onDelete,
+  onClick,
 }: {
   client: Customer
   canDelete: boolean
   onDelete: (id: string) => void
+  onClick: () => void
 }) {
   const initials = client.full_name
     .split(' ')
@@ -196,15 +200,23 @@ function ClientCard({
     .slice(0, 2)
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+    <div
+      onClick={onClick}
+      className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4 cursor-pointer hover:border-blue-200 hover:shadow-md transition group"
+    >
       {/* Avatar initiales */}
-      <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-        <span className="text-blue-800 font-bold text-sm">{initials}</span>
+      <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition">
+        <span className="text-blue-800 font-bold text-sm group-hover:text-white transition">{initials}</span>
       </div>
 
       {/* Infos */}
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-900 truncate">{client.full_name}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-gray-900 truncate group-hover:text-blue-800 transition">{client.full_name}</p>
+          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition hidden sm:inline-block">
+            Voir historique →
+          </span>
+        </div>
         <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
           <span>📞</span>
           <span>{client.phone}</span>
@@ -217,7 +229,10 @@ function ClientCard({
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-2 flex-shrink-0">
+      <div
+        className="flex flex-col gap-2 flex-shrink-0"
+        onClick={e => e.stopPropagation()}
+      >
         <a
           href={`tel:${client.phone}`}
           className="w-9 h-9 rounded-xl bg-green-50 text-green-700 flex items-center justify-center hover:bg-green-100 transition"
@@ -261,11 +276,20 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 // ─── Composant principal ─────────────────────────────────────────────────────
-export default function ClientsView({ initialClients, userRole }: ClientsViewProps) {
+export default function ClientsView({
+  initialClients,
+  userRole,
+  initialOpenModal = false,
+}: ClientsViewProps) {
   const [clients, setClients] = useState<Customer[]>(initialClients)
-  const [showModal, setShowModal]   = useState(false)
+  const [showModal, setShowModal]   = useState(initialOpenModal)
+  const [selectedClient, setSelectedClient] = useState<Customer | null>(null)
   const [search, setSearch]         = useState('')
   const [, startTransition]         = useTransition()
+
+  useEffect(() => {
+    if (initialOpenModal) setShowModal(true)
+  }, [initialOpenModal])
 
   // Recherche client-side sur la liste déjà chargée
   const filtered = useMemo(() => {
@@ -361,6 +385,7 @@ export default function ClientsView({ initialClients, userRole }: ClientsViewPro
               client={client}
               canDelete={canDelete}
               onDelete={handleDelete}
+              onClick={() => setSelectedClient(client)}
             />
           ))}
         </div>
@@ -374,6 +399,14 @@ export default function ClientsView({ initialClients, userRole }: ClientsViewPro
       >
         +
       </button>
+
+      {/* Drawer détail client & historique */}
+      {selectedClient && (
+        <ClientDetailDrawer
+          client={selectedClient}
+          onClose={() => setSelectedClient(null)}
+        />
+      )}
 
       {/* Modal d'ajout */}
       {showModal && (
