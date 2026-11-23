@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { getStorePlanState } from '@/lib/supabase/store-status'
+import { SuspendedAccountBanner } from '@/components/dashboard/SuspendedAccountBanner'
 import DashboardLayout from './_components/DashboardLayout'
 import OwnerDashboardView, {
   type DashboardDeliveryItem,
@@ -44,6 +46,11 @@ export default async function DashboardPage({
 
   const companyName = profile.companies?.name ?? 'Votre entreprise'
   const userName = profile.full_name
+  const storePlanState = await getStorePlanState(
+    supabase,
+    user.id,
+    profile.company_id
+  )
 
   const [
     { data: orders },
@@ -73,6 +80,10 @@ export default async function DashboardPage({
       logoUrl={profile.companies?.logo_url ?? null}
       themePalette={profile.companies?.theme_palette ?? 'indigo'}
     >
+      {storePlanState.isSuspended && (
+        <SuspendedAccountBanner storeName={companyName} />
+      )}
+
       {showPasswordUpdatedToast && (
         <div
           role="status"

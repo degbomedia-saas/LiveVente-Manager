@@ -60,7 +60,9 @@ export function PublicLiveCartClient({
   const [isAnalyzingVoice, setIsAnalyzingVoice] = useState(false)
   const [confirmedParcel, setConfirmedParcel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const maxAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function updateQty(productId: string, delta: number) {
     setCart((prev) => {
@@ -99,8 +101,13 @@ export function PublicLiveCartClient({
       }
 
       recorder.onstop = async () => {
+        if (maxAudioTimerRef.current) clearTimeout(maxAudioTimerRef.current)
         stream.getTracks().forEach((t) => t.stop())
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        if (blob.size > 2 * 1024 * 1024) {
+          setError('L’enregistrement vocal dépasse la limite de 2 Mo (30 secondes max).')
+          return
+        }
         setIsAnalyzingVoice(true)
         try {
           const fd = new FormData()
@@ -111,27 +118,29 @@ export function PublicLiveCartClient({
             body: fd,
           })
           const data = await res.json()
-          if (res.ok && !data.error) {
-            const parsed = data as ParsedVoiceOrderResult
-            if (parsed.customer_name) setCustomerName(parsed.customer_name)
-            if (parsed.phone) setPhone(parsed.phone)
-            if (parsed.address_note) setAddressNote(parsed.address_note)
-            if (parsed.zone_name) {
-              const z = store.zones.find(
-                (zn) =>
-                  zn.zone_name.toLowerCase() === parsed.zone_name.toLowerCase()
-              )
-              if (z) setSelectedZone(z)
-            }
-            if (parsed.items.length > 0) {
-              const nextCart: Record<string, number> = { ...cart }
-              for (const item of parsed.items) {
-                if (item.product_id) {
-                  nextCart[item.product_id] = item.quantity
-                }
+          if (!res.ok || data.error) {
+            setError(data.error || 'Impossible d’analyser la commande vocale.')
+            return
+          }
+          const parsed = data as ParsedVoiceOrderResult
+          if (parsed.customer_name) setCustomerName(parsed.customer_name)
+          if (parsed.phone) setPhone(parsed.phone)
+          if (parsed.address_note) setAddressNote(parsed.address_note)
+          if (parsed.zone_name) {
+            const z = store.zones.find(
+              (zn) =>
+                zn.zone_name.toLowerCase() === parsed.zone_name.toLowerCase()
+            )
+            if (z) setSelectedZone(z)
+          }
+          if (parsed.items.length > 0) {
+            const nextCart: Record<string, number> = { ...cart }
+            for (const item of parsed.items) {
+              if (item.product_id) {
+                nextCart[item.product_id] = item.quantity
               }
-              setCart(nextCart)
             }
+            setCart(nextCart)
           }
         } finally {
           setIsAnalyzingVoice(false)
@@ -141,6 +150,15 @@ export function PublicLiveCartClient({
       mediaRecorderRef.current = recorder
       recorder.start()
       setIsRecording(true)
+      maxAudioTimerRef.current = setTimeout(() => {
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state !== 'inactive'
+        ) {
+          mediaRecorderRef.current.stop()
+        }
+        setIsRecording(false)
+      }, 30000)
     } catch {
       setError('Autorisez le micro pour dicter votre commande.')
     }
@@ -158,6 +176,7 @@ export function PublicLiveCartClient({
 
   function handleConfirmOrder(e: React.FormEvent) {
     e.preventDefault()
+    if (isPending || isSubmitting) return
     if (selectedItems.length === 0) {
       setError('Veuillez choisir au moins un article du Live.')
       return
@@ -167,20 +186,25 @@ export function PublicLiveCartClient({
       return
     }
     setError(null)
+    setIsSubmitting(true)
 
     startTransition(async () => {
-      const res = await createPublicLiveCartOrder({
-        companyId: store.companyId,
-        customerName: customerName.trim() || 'Cliente Live',
-        phone: phone.trim(),
-        zoneName: selectedZone.zone_name,
-        deliveryFeeFcfa: selectedZone.fee_fcfa,
-        addressNote: addressNote.trim(),
-        paymentMethod,
-        items: selectedItems,
-      })
+      try {
+        const res = await createPublicLiveCartOrder({
+          companyId: store.companyId,
+          customerName: customerName.trim() || 'Cliente Live',
+          phone: phone.trim(),
+          zoneName: selectedZone.zone_name,
+          deliveryFeeFcfa: selectedZone.fee_fcfa,
+          addressNote: addressNote.trim(),
+          paymentMethod,
+          items: selectedItems,
+        })
 
-      setConfirmedParcel(res.parcelNumber)
+        setConfirmedParcel(res.parcelNumber)
+      } finally {
+        setIsSubmitting(false)
+      }
     })
   }
 
@@ -445,11 +469,11 @@ export function PublicLiveCartClient({
 
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isSubmitting}
               style={{ backgroundColor: store.paletteHex }}
-              className="w-full py-4 px-5 rounded-2xl text-sm font-extrabold text-white shadow-sm cursor-pointer disabled:opacity-50"
+              className="w-full py-4 px-5 rounded-2xl text-sm font-extrabold text-white shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPending
+              {isPending || isSubmitting
                 ? 'Confirmation en cours...'
                 : `Confirmer ma commande • ${totalCod.toLocaleString('fr-FR')} FCFA`}
             </button>

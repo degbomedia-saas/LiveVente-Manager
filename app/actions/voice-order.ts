@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { assertStoreNotSuspended } from '@/lib/supabase/store-status'
 import { getNextDailyParcelNumber } from '@/app/actions/orders'
 import { checkOrderMonthlyQuota } from '@/lib/quotas'
 import type { ParsedVoiceOrderItem } from '@/app/api/orders/parse-voice/route'
@@ -31,6 +32,15 @@ export async function saveVoiceOrder(input: SaveVoiceOrderInput) {
   const profile = await getOrCreateProfile(supabase, user)
   if (!profile.company_id) {
     return { error: 'Boutique introuvable.' }
+  }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
   }
 
   // Vérification du quota mensuel de commandes (free_mvp = 30 commandes/mois)

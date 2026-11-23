@@ -85,6 +85,7 @@ export function FinancesView({
   const [isPartial, setIsPartial] = useState(false)
   const [notes, setNotes] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const liveExpected = Math.max(0, Number(expectedInput) || 0)
@@ -93,42 +94,48 @@ export function FinancesView({
 
   function handleRecordSettlement(e: React.FormEvent) {
     e.preventDefault()
+    if (isSubmitting || isPending) return
     setFeedback(null)
+    setIsSubmitting(true)
 
     startTransition(async () => {
-      const res = await recordPartialOrFullSettlement({
-        expectedAmountFcfa: liveExpected,
-        remittedAmountFcfa: liveRemitted,
-        deliveryFeesFcfa: totalDeliveryFees,
-        isPartial,
-        notes,
-      })
+      try {
+        const res = await recordPartialOrFullSettlement({
+          expectedAmountFcfa: liveExpected,
+          remittedAmountFcfa: liveRemitted,
+          deliveryFeesFcfa: totalDeliveryFees,
+          isPartial,
+          notes,
+        })
 
-      const newRow: SettlementRowItem = {
-        id: `remise-${Date.now()}`,
-        total_cod_fcfa: liveRemitted,
-        delivery_fees_fcfa: totalDeliveryFees,
-        platform_fee_fcfa: 0,
-        net_payout_fcfa: liveRemitted,
-        expected_amount_fcfa: liveExpected,
-        remitted_amount_fcfa: liveRemitted,
-        discrepancy_fcfa: liveDiscrepancy,
-        is_partial: isPartial,
-        notes: notes || null,
-        status: liveDiscrepancy >= 0 && !isPartial ? 'paid_out' : 'pending',
-        created_at: new Date().toISOString(),
+        const newRow: SettlementRowItem = {
+          id: `remise-${Date.now()}`,
+          total_cod_fcfa: liveRemitted,
+          delivery_fees_fcfa: totalDeliveryFees,
+          platform_fee_fcfa: 0,
+          net_payout_fcfa: liveRemitted,
+          expected_amount_fcfa: liveExpected,
+          remitted_amount_fcfa: liveRemitted,
+          discrepancy_fcfa: liveDiscrepancy,
+          is_partial: isPartial,
+          notes: notes || null,
+          status: liveDiscrepancy >= 0 && !isPartial ? 'paid_out' : 'pending',
+          created_at: new Date().toISOString(),
+        }
+
+        setSettlements((prev) => [newRow, ...prev])
+        setNotes('')
+        setFeedback(
+          'error' in res && res.error
+            ? res.error
+            : `Remise enregistrée dans l'historique (Écart : ${
+                liveDiscrepancy > 0 ? `+${liveDiscrepancy}` : liveDiscrepancy
+              } FCFA).`
+        )
+        router.refresh()
+      } finally {
+        setIsSubmitting(false)
       }
-
-      setSettlements((prev) => [newRow, ...prev])
-      setNotes('')
-      setFeedback(
-        'error' in res && res.error
-          ? res.error
-          : `Remise enregistrée dans l'historique (Écart : ${
-              liveDiscrepancy > 0 ? `+${liveDiscrepancy}` : liveDiscrepancy
-            } FCFA).`
-      )
-      router.refresh()
     })
   }
 
@@ -371,10 +378,12 @@ export function FinancesView({
 
           <button
             type="submit"
-            disabled={isPending}
-            className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-primary hover:bg-primary-hover text-white transition cursor-pointer"
+            disabled={isPending || isSubmitting}
+            className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-primary hover:bg-primary-hover text-white transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPending ? 'Ajout...' : 'Ajouter la remise à l’historique'}
+            {isPending || isSubmitting
+              ? 'Ajout...'
+              : 'Ajouter la remise à l’historique'}
           </button>
         </div>
       </form>

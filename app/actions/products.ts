@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { assertStoreNotSuspended } from '@/lib/supabase/store-status'
 import {
   productSchema,
   updateProductSchema,
@@ -40,6 +41,15 @@ export async function createProduct(rawData: ProductInput) {
   const profile = await getOrCreateProfile(supabase, user)
   if (profile.profileMissing || !profile.company_id) {
     return { error: 'Profil introuvable.' }
+  }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
   }
 
   const { data: storeRow } = await supabase
@@ -140,6 +150,15 @@ export async function updateProduct(rawData: UpdateProductInput) {
     return { error: 'Profil introuvable.' }
   }
 
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
+
   const { data: product, error: updateError } = await supabase
     .from('products')
     .update({
@@ -223,6 +242,15 @@ export async function toggleProductActive(productId: string, isActive: boolean) 
     return { error: 'Profil introuvable.' }
   }
 
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
+
   const { error } = await supabase
     .from('products')
     .update({ is_active: isActive })
@@ -265,5 +293,43 @@ export async function toggleProductShowInLive(
     .eq('company_id', profile.company_id)
 
   revalidatePath('/dashboard/products')
+  return { success: true as const }
+}
+
+export async function archiveProduct(productId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const profile = await getOrCreateProfile(supabase, user)
+  if (!profile.company_id) return { error: 'Profil introuvable.' }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) return { error: subCheck.error }
+
+  const { error } = await supabase
+    .from('products')
+    .update({ is_archived: true, is_active: false })
+    .eq('id', productId)
+    .eq('company_id', profile.company_id)
+
+  if (error) {
+    await supabase
+      .from('products')
+      .update({ is_active: false })
+      .eq('id', productId)
+      .eq('company_id', profile.company_id)
+  }
+
+  revalidatePath('/produits')
+  revalidatePath('/dashboard/products')
+  revalidatePath('/commandes')
+  revalidatePath('/dashboard/orders')
   return { success: true as const }
 }

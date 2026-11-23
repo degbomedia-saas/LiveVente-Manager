@@ -23,6 +23,7 @@ import {
   type ShopPaymentMethod,
 } from '@/lib/validations/orders'
 import { assignDeliverySchema } from '@/lib/validations/deliveries'
+import { ServerPagination } from '@/components/ui/ServerPagination'
 import PackingView from './PackingView'
 
 export interface OrderCustomerOption {
@@ -113,6 +114,10 @@ interface OrdersViewProps {
   initialTab?: 'all' | 'packing'
   initialOrdersTab?: 'active' | 'history'
   mode?: 'orders' | 'packing'
+  currentPage?: number
+  totalOrdersCount?: number
+  pageSize?: number
+  currentTabParam?: string
 }
 
 interface DraftItem {
@@ -362,7 +367,10 @@ function NewOrderModal({
     }
   }
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   function handleSubmitWithStatus(targetStatus: 'pending_confirmation' | 'confirmed') {
+    if (isSubmitting || isPending) return
     setErrors({})
     setServerError(null)
 
@@ -429,17 +437,22 @@ function NewOrderModal({
       return
     }
 
+    setIsSubmitting(true)
     startTransition(async () => {
-      const res = await createOrder(parsed.data)
-      if (res.error) {
-        setServerError(res.error)
-        return
+      try {
+        const res = await createOrder(parsed.data)
+        if (res.error) {
+          setServerError(res.error)
+          return
+        }
+        onCreated(
+          (res.order as unknown as OrderRow | null) ?? null,
+          res.createdCustomer ?? null
+        )
+        onClose()
+      } finally {
+        setIsSubmitting(false)
       }
-      onCreated(
-        (res.order as unknown as OrderRow | null) ?? null,
-        res.createdCustomer ?? null
-      )
-      onClose()
     })
   }
 
@@ -1188,19 +1201,19 @@ function NewOrderModal({
             <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button
                 type="button"
-                disabled={isPending}
+                disabled={isPending || isSubmitting}
                 onClick={() => handleSubmitWithStatus('pending_confirmation')}
-                className="h-11 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 disabled:opacity-50 transition text-sm"
+                className="h-11 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm"
               >
                 À confirmer
               </button>
               <button
                 type="button"
-                disabled={isPending}
+                disabled={isPending || isSubmitting}
                 onClick={() => handleSubmitWithStatus('confirmed')}
-                className="h-11 px-6 rounded-xl bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-semibold shadow-sm transition text-sm flex items-center justify-center gap-1.5"
+                className="h-11 px-6 rounded-xl bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold shadow-sm transition text-sm flex items-center justify-center gap-1.5"
               >
-                <span>{isPending ? 'Enregistrement...' : 'Enregistrer la commande'}</span>
+                <span>{isPending || isSubmitting ? 'Enregistrement...' : 'Enregistrer la commande'}</span>
               </button>
             </div>
           </div>
@@ -1386,6 +1399,10 @@ export default function OrdersView({
   initialTab = 'all',
   initialOrdersTab = 'active',
   mode = 'orders',
+  currentPage = 1,
+  totalOrdersCount,
+  pageSize = 20,
+  currentTabParam,
 }: OrdersViewProps) {
   const router = useRouter()
   const [orders, setOrders] = useState<OrderRow[]>(initialOrders)
@@ -2284,6 +2301,17 @@ export default function OrdersView({
             })}
           </div>
         </>
+      )}
+      {!isPackingMode && (
+        <div className="mt-5">
+          <ServerPagination
+            currentPage={currentPage}
+            totalCount={totalOrdersCount ?? orders.length}
+            pageSize={pageSize}
+            basePath="/dashboard/orders"
+            extraQuery={{ tab: currentTabParam }}
+          />
+        </div>
       )}
       </>
       )}

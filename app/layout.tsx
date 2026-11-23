@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateProfile, type ThemePalette } from "@/lib/supabase/ensure-profile";
 import { BrandConfigProvider } from "@/lib/config/brand";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  themeColor: "#242424",
+};
 
 async function getActiveBranding(): Promise<{
   storeName: string;
@@ -52,6 +56,16 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `${storeName} — Commandes & Livraisons TikTok, WhatsApp, Instagram`,
     description: `Suivi de colis, étiquettes QR et caisse T-Money / Flooz / Espèces — ${storeName}`,
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: "/kaba-icon.svg",
+      apple: "/kaba-icon.svg",
+    },
+    appleWebApp: {
+      capable: true,
+      title: "Kaba Kaba",
+      statusBarStyle: "black-translucent",
+    },
   };
 }
 

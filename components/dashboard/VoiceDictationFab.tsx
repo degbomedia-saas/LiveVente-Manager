@@ -20,6 +20,9 @@ import type {
   ParsedVoiceOrderResult,
 } from '@/app/api/orders/parse-voice/route'
 
+const MAX_AUDIO_SECONDS = 30
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024 // 2 Mo
+
 function formatDuration(sec: number) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0')
   const s = String(sec % 60).padStart(2, '0')
@@ -58,7 +61,9 @@ export function VoiceDictationFab({
   const [paymentMethod, setPaymentMethod] =
     useState<ParsedVoiceOrderResult['payment_method']>('cash')
   const [items, setItems] = useState<ParsedVoiceOrderItem[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const elapsedSecRef = useRef(0)
 
   useEffect(() => {
     return () => {
@@ -91,15 +96,40 @@ export function VoiceDictationFab({
         stream.getTracks().forEach((track) => track.stop())
         if (timerRef.current) clearInterval(timerRef.current)
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        await sendToGroq({ audioBlob: blob })
+        if (blob.size > MAX_AUDIO_BYTES) {
+          setDrawerOpen(true)
+          setError(
+            'Enregistrement bloqué : le fichier audio dépasse 2 Mo (max 30 secondes).'
+          )
+          return
+        }
+        await sendToGroq({
+          audioBlob: blob,
+          durationSec: elapsedSecRef.current,
+        })
       }
 
       mediaRecorderRef.current = recorder
       recorder.start()
       setIsRecording(true)
       setElapsedSec(0)
+      elapsedSecRef.current = 0
       timerRef.current = setInterval(() => {
-        setElapsedSec((prev) => prev + 1)
+        setElapsedSec((prev) => {
+          const next = prev + 1
+          elapsedSecRef.current = next
+          if (next >= MAX_AUDIO_SECONDS) {
+            if (
+              mediaRecorderRef.current &&
+              mediaRecorderRef.current.state !== 'inactive'
+            ) {
+              mediaRecorderRef.current.stop()
+            }
+            setIsRecording(false)
+            setToast('Limite de 30 secondes atteinte — analyse en cours...')
+          }
+          return next
+        })
       }, 1000)
     } catch {
       setError(
@@ -119,7 +149,24 @@ export function VoiceDictationFab({
     setIsRecording(false)
   }
 
-  async function sendToGroq(payload: { audioBlob?: Blob; rawText?: string }) {
+  async function sendToGroq(payload: {
+    audioBlob?: Blob
+    durationSec?: number
+    rawText?: string
+  }) {
+    if (payload.audioBlob && payload.audioBlob.size > MAX_AUDIO_BYTES) {
+      setDrawerOpen(true)
+      setError(
+        'Enregistrement bloqué : l’audio dépasse la limite de 2 Mo (30 secondes max).'
+      )
+      return
+    }
+    if ((payload.durationSec ?? 0) > MAX_AUDIO_SECONDS) {
+      setDrawerOpen(true)
+      setError('Enregistrement bloqué : durée maximale de 30 secondes dépassée.')
+      return
+    }
+
     setIsAnalyzing(true)
     setDrawerOpen(true)
     setError(null)
@@ -129,6 +176,10 @@ export function VoiceDictationFab({
       const formData = new FormData()
       if (payload.audioBlob) {
         formData.append('audio', payload.audioBlob, 'dictation.webm')
+        formData.append(
+          'duration_sec',
+          String(Math.min(MAX_AUDIO_SECONDS, payload.durationSec ?? elapsedSec))
+        )
       }
       if (payload.rawText) {
         formData.append('raw_text', payload.rawText)
@@ -167,61 +218,67 @@ export function VoiceDictationFab({
   }
 
   function handleValidateOrder(chainNext: boolean) {
+    if (isSubmitting || isPending || isAnalyzing) return
+    setIsSubmitting(true)
     setError(null)
     setQuotaReachedMsg(null)
     startTransition(async () => {
-      const res = await saveVoiceOrder({
-        customer_name: customerName,
-        phone,
-        zone_name: zoneName,
-        delivery_fee_fcfa: deliveryFee,
-        address_note: addressNote,
-        payment_method: paymentMethod,
-        source: modeTab === 'whatsapp' ? 'whatsapp' : 'tiktok',
-        items:
-          items.length > 0
-            ? items
-            : [
-                {
-                  product_id: null,
-                  product_name: 'Article Live TikTok',
-                  quantity: 1,
-                  unit_price_fcfa: 10000,
-                },
-              ],
-      })
+      try {
+        const res = await saveVoiceOrder({
+          customer_name: customerName,
+          phone,
+          zone_name: zoneName,
+          delivery_fee_fcfa: deliveryFee,
+          address_note: addressNote,
+          payment_method: paymentMethod,
+          source: modeTab === 'whatsapp' ? 'whatsapp' : 'tiktok',
+          items:
+            items.length > 0
+              ? items
+              : [
+                  {
+                    product_id: null,
+                    product_name: 'Article Live TikTok',
+                    quantity: 1,
+                    unit_price_fcfa: 10000,
+                  },
+                ],
+        })
 
-      if ('error' in res && res.error) {
-        if ('quotaReached' in res && res.quotaReached) {
-          setQuotaReachedMsg(res.error)
-        } else {
-          setError(res.error)
+        if ('error' in res && res.error) {
+          if ('quotaReached' in res && res.quotaReached) {
+            setQuotaReachedMsg(res.error)
+          } else {
+            setError(res.error)
+          }
+          return
         }
-        return
-      }
 
-      router.refresh()
+        router.refresh()
 
-      if (chainNext) {
-        setToast(
-          `Commande ${res.parcelNumber} enregistrée${
-            res.isMissingInfo ? ' (Infos manquantes)' : ''
-          } ! Prêt pour la suivante.`
-        )
-        setCustomerName('')
-        setPhone('')
-        setZoneName('')
-        setAddressNote('')
-        setTranscript('')
-        setWhatsappRawText('')
-        if (modeTab === 'audio' && !inlineMode) {
+        if (chainNext) {
+          setToast(
+            `Commande ${res.parcelNumber} enregistrée${
+              res.isMissingInfo ? ' (Infos manquantes)' : ''
+            } ! Prêt pour la suivante.`
+          )
+          setCustomerName('')
+          setPhone('')
+          setZoneName('')
+          setAddressNote('')
+          setTranscript('')
+          setWhatsappRawText('')
+          if (modeTab === 'audio' && !inlineMode) {
+            setDrawerOpen(false)
+            setTimeout(() => {
+              startRecording()
+            }, 250)
+          }
+        } else if (!inlineMode) {
           setDrawerOpen(false)
-          setTimeout(() => {
-            startRecording()
-          }, 250)
         }
-      } else if (!inlineMode) {
-        setDrawerOpen(false)
+      } finally {
+        setIsSubmitting(false)
       }
     })
   }
@@ -311,8 +368,8 @@ export function VoiceDictationFab({
           <div className="text-xs">
             <p className="font-bold text-[#0F172A]">
               {isRecording
-                ? `Enregistrement en cours (${formatDuration(elapsedSec)})...`
-                : 'Dictez la commande à voix haute'}
+                ? `Enregistrement en cours (${formatDuration(elapsedSec)} / 00:30)...`
+                : 'Dictez la commande à voix haute (max 30s / 2 Mo)'}
             </p>
             <p className="text-[#64748B] mt-0.5">
               Ex : &laquo; Afiwa 90 12 34 56 à Tokoin face pharmacie, 2 robes
@@ -572,13 +629,13 @@ export function VoiceDictationFab({
           <div className="flex flex-col sm:flex-row gap-2.5 pt-3 border-t border-[#E2E8F0]">
             <button
               type="button"
-              disabled={isPending}
+              disabled={isPending || isSubmitting}
               onClick={() => handleValidateOrder(true)}
-              className="flex-1 py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-[#10B981] hover:bg-[#059669] text-white shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
+              className="flex-1 py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-[#10B981] hover:bg-[#059669] text-white shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Mic className="w-4 h-4" />
               <span>
-                {isPending
+                {isPending || isSubmitting
                   ? 'Enregistrement...'
                   : 'Valider et enchaîner ⚡'}
               </span>
@@ -586,11 +643,11 @@ export function VoiceDictationFab({
 
             <button
               type="button"
-              disabled={isPending}
+              disabled={isPending || isSubmitting}
               onClick={() => handleValidateOrder(false)}
-              className="py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-bold bg-[#0F172A] text-white cursor-pointer"
+              className="py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-bold bg-[#0F172A] text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Valider
+              {isPending || isSubmitting ? 'Patientez...' : 'Valider'}
             </button>
           </div>
         </>

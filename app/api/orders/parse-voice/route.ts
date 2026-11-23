@@ -24,6 +24,9 @@ export interface ParsedVoiceOrderResult {
   is_missing_info: boolean
 }
 
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024 // 2 Mo maximum
+const MAX_AUDIO_SECONDS = 30 // 30 secondes maximum
+
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.GROQ_API_KEY
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData()
     const audioFile = formData.get('audio') as File | null
+    const durationSec = Number(formData.get('duration_sec') || 0)
     const rawText = ((formData.get('raw_text') as string | null) || '').trim()
     const sellerIdParam = (formData.get('seller_id') as string | null) || null
     const companyIdParam =
@@ -49,6 +53,27 @@ export async function POST(request: Request) {
         { error: 'Veuillez enregistrer un audio ou coller un message WhatsApp.' },
         { status: 400 }
       )
+    }
+
+    if (audioFile) {
+      if (audioFile.size > MAX_AUDIO_BYTES) {
+        return NextResponse.json(
+          {
+            error:
+              'L’enregistrement vocal dépasse la taille maximale autorisée (2 Mo / 30 secondes max).',
+          },
+          { status: 413 }
+        )
+      }
+      if (durationSec > MAX_AUDIO_SECONDS) {
+        return NextResponse.json(
+          {
+            error:
+              'L’enregistrement vocal ne doit pas dépasser 30 secondes.',
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const supabase = await createClient()

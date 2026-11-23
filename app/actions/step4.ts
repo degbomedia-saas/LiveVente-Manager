@@ -1,8 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { assertStoreNotSuspended } from '@/lib/supabase/store-status'
 import { checkDriverQuota } from '@/lib/quotas'
 
 function generateHexToken(): string {
@@ -27,6 +29,15 @@ export async function createDriverInvitation(input: {
   if (!user) return { error: 'Non authentifié.' }
 
   const profile = await getOrCreateProfile(supabase, user)
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
 
   // Vérification du quota de livreurs selon le forfait (free_mvp = 1, pro = 3, business = illimité)
   const quotaCheck = await checkDriverQuota(
@@ -85,6 +96,15 @@ export async function autoAssignOrdersByZone() {
   if (!user) return { error: 'Non authentifié.' }
 
   const profile = await getOrCreateProfile(supabase, user)
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
 
   // Récupérer les livreurs actifs (table drivers + profiles role=courier)
   const [{ data: drivers }, { data: courierProfiles }, { data: orders }] =
@@ -220,6 +240,15 @@ export async function submitDriverDeliveryPod(input: {
   if (!user) return { error: 'Non authentifié.' }
 
   const profile = await getOrCreateProfile(supabase, user)
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
   const outcome = input.outcome ?? 'delivered'
 
   if (outcome === 'delivered') {
@@ -321,6 +350,15 @@ export async function recordPartialOrFullSettlement(input: {
   if (!user) return { error: 'Non authentifié.' }
 
   const profile = await getOrCreateProfile(supabase, user)
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
   if (profile.role === 'employee' || profile.role === 'courier' || profile.role === 'driver') {
     return {
       error:
@@ -418,6 +456,15 @@ export async function createOrderReturn(input: {
   if (!user) return { error: 'Non authentifié.' }
 
   const profile = await getOrCreateProfile(supabase, user)
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
+  }
   const { data: storeRow } = await supabase
     .from('stores')
     .select('id')
@@ -485,6 +532,17 @@ export async function updateReturnStatus(input: {
   return { success: true as const }
 }
 
+const platformSettingsSchema = z.object({
+  saasName: z.string().trim().min(1).max(100),
+  saasLogoUrl: z.string().trim().max(2000).nullable().optional(),
+  freeMvpMaxOrdersMonth: z.number().int().min(1).max(100000).optional(),
+  freeMvpMaxDrivers: z.number().int().min(1).max(10000).optional(),
+  freeMvpMaxAiTrials: z.number().int().min(1).max(10000).optional(),
+  proMaxDrivers: z.number().int().min(1).max(10000).optional(),
+  isMaintenanceMode: z.boolean().optional(),
+  maintenanceMessage: z.string().trim().max(1000).nullable().optional(),
+})
+
 export async function updatePlatformSettings(input: {
   saasName: string
   saasLogoUrl?: string | null
@@ -492,12 +550,29 @@ export async function updatePlatformSettings(input: {
   freeMvpMaxDrivers?: number
   freeMvpMaxAiTrials?: number
   proMaxDrivers?: number
+  isMaintenanceMode?: boolean
+  maintenanceMessage?: string | null
 }) {
+  const parsed = platformSettingsSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Données invalides.' }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Non authentifié.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+    return { error: 'Accès réservé aux administrateurs.' }
+  }
 
   const { data: existing } = await supabase
     .from('platform_settings')
@@ -505,14 +580,22 @@ export async function updatePlatformSettings(input: {
     .limit(1)
     .maybeSingle()
 
-  const payload = {
-    saas_name: input.saasName.trim(),
-    saas_logo_url: input.saasLogoUrl || null,
-    free_mvp_max_orders_month: input.freeMvpMaxOrdersMonth ?? 30,
-    free_mvp_max_drivers: input.freeMvpMaxDrivers ?? 1,
-    free_mvp_max_ai_trials: input.freeMvpMaxAiTrials ?? 3,
-    pro_max_drivers: input.proMaxDrivers ?? 3,
+  const data = parsed.data
+  const payload: Record<string, unknown> = {
+    saas_name: data.saasName,
+    saas_logo_url: data.saasLogoUrl || null,
+    free_mvp_max_orders_month: data.freeMvpMaxOrdersMonth ?? 30,
+    free_mvp_max_drivers: data.freeMvpMaxDrivers ?? 1,
+    free_mvp_max_ai_trials: data.freeMvpMaxAiTrials ?? 3,
+    pro_max_drivers: data.proMaxDrivers ?? 3,
     updated_at: new Date().toISOString(),
+  }
+
+  if (typeof data.isMaintenanceMode === 'boolean') {
+    payload.is_maintenance_mode = data.isMaintenanceMode
+  }
+  if (data.maintenanceMessage !== undefined) {
+    payload.maintenance_message = data.maintenanceMessage || null
   }
 
   if (existing?.id) {
@@ -524,21 +607,135 @@ export async function updatePlatformSettings(input: {
       await supabase
         .from('platform_settings')
         .update({
-          saas_name: input.saasName.trim(),
-          saas_logo_url: input.saasLogoUrl || null,
+          saas_name: data.saasName,
+          saas_logo_url: data.saasLogoUrl || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
     }
   } else {
     await supabase.from('platform_settings').insert({
-      saas_name: input.saasName.trim(),
-      saas_logo_url: input.saasLogoUrl || null,
+      saas_name: data.saasName,
+      saas_logo_url: data.saasLogoUrl || null,
     })
   }
 
   revalidatePath('/admin')
+  revalidatePath('/maintenance')
   revalidatePath('/')
+  return { success: true as const }
+}
+
+const logEntrySchema = z.object({
+  level: z.enum(['info', 'warning', 'error', 'critical']).default('error'),
+  source: z.string().trim().min(1).max(120).default('admin'),
+  message: z.string().trim().min(1).max(1000),
+})
+
+export async function recordAdminSystemLog(input: {
+  level?: 'info' | 'warning' | 'error' | 'critical'
+  source?: string
+  message: string
+}) {
+  const parsed = logEntrySchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Format de journal invalide.' }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+    return { error: 'Non autorisé.' }
+  }
+
+  const { error } = await supabase.from('system_logs').insert({
+    level: parsed.data.level,
+    source: parsed.data.source,
+    message: parsed.data.message,
+    user_id: user.id,
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/admin')
+  return { success: true as const }
+}
+
+export async function archiveDriver(driverId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const profile = await getOrCreateProfile(supabase, user)
+  if (!profile.company_id) return { error: 'Profil introuvable.' }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) return { error: subCheck.error }
+
+  const { error } = await supabase
+    .from('drivers')
+    .update({ is_archived: true, is_active: false })
+    .eq('id', driverId)
+    .eq('company_id', profile.company_id)
+
+  if (error) {
+    await supabase
+      .from('drivers')
+      .update({ is_active: false })
+      .eq('id', driverId)
+      .eq('company_id', profile.company_id)
+  }
+
+  revalidatePath('/dashboard/drivers')
+  revalidatePath('/dashboard/couriers')
+  return { success: true as const }
+}
+
+export async function clearAdminSystemLogs() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+    return { error: 'Non autorisé.' }
+  }
+
+  const { error } = await supabase
+    .from('system_logs')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000')
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/admin')
   return { success: true as const }
 }
 

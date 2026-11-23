@@ -6,6 +6,11 @@ import { Phone, MessageCircle, Check, X } from 'lucide-react'
 import { completeCourierDelivery } from '@/app/actions/deliveries'
 import { createClient } from '@/lib/supabase/client'
 import {
+  compressImageForUpload,
+  validateImageFile,
+} from '@/lib/utils/compress-image'
+import { isTodayInLome } from '@/lib/utils/lome-time'
+import {
   completeDeliverySchema,
   FAILURE_REASONS,
   PAYMENT_MODES,
@@ -73,15 +78,7 @@ function formatMoney(amount: number) {
 }
 
 function isToday(dateStr?: string | null): boolean {
-  if (!dateStr) return false
-  const target = new Date(dateStr)
-  if (Number.isNaN(target.getTime())) return false
-  const now = new Date()
-  return (
-    target.getFullYear() === now.getFullYear() &&
-    target.getMonth() === now.getMonth() &&
-    target.getDate() === now.getDate()
-  )
+  return isTodayInLome(dateStr)
 }
 
 function cleanPhone(raw?: string | null): string {
@@ -164,6 +161,13 @@ function CompleteDeliveryModal({
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
+      const check = validateImageFile(file)
+      if (!check.valid) {
+        setError(check.error)
+        e.target.value = ''
+        return
+      }
+      setError(null)
       setPhotoFile(file)
       const url = URL.createObjectURL(file)
       setPhotoPreview(url)
@@ -196,14 +200,23 @@ function CompleteDeliveryModal({
     if (outcome === 'delivered' && photoFile) {
       setUploadingPhoto(true)
       try {
+        // Compression côté client (Canvas HTML5, max 1000px, qualité JPEG 0.75) avant envoi Supabase Storage
+        const compressedPhoto = await compressImageForUpload(
+          photoFile,
+          1000,
+          0.75
+        )
         const supabase = createClient()
-        const ext = photoFile.name.split('.').pop() || 'jpg'
-        const fileName = `${delivery.id}_${Date.now()}.${ext}`
+        const fileName = `${delivery.id}_${Date.now()}.jpg`
 
         // Timeout de sécurité pour l'upload photo (15 secondes max)
         const uploadPromise = supabase.storage
           .from('delivery-proofs')
-          .upload(fileName, photoFile, { cacheControl: '3600', upsert: true })
+          .upload(fileName, compressedPhoto, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: 'image/jpeg',
+          })
 
         const timeoutPromise = new Promise<{ error: Error }>((_, reject) =>
           setTimeout(() => reject(new Error('TIMEOUT_UPLOAD')), 15000)

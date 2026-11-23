@@ -83,6 +83,7 @@ function SettlementModal({
   const [recordDifference, setRecordDifference] = useState(false)
   const [differenceReason, setDifferenceReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   // Calcul dynamique de l'écart : Montant attendu - Montant versé
@@ -115,6 +116,7 @@ function SettlementModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isSubmitting || isPending) return
     setError(null)
 
     const diffAmount = recordDifference && isMissingAmount ? computedDifference : 0
@@ -132,20 +134,25 @@ function SettlementModal({
       return
     }
 
+    setIsSubmitting(true)
     startTransition(async () => {
-      const res = await createCourierSettlement(parsed.data)
-      if (res.error) {
-        setError(res.error)
-        return
+      try {
+        const res = await createCourierSettlement(parsed.data)
+        if (res.error) {
+          setError(res.error)
+          return
+        }
+        onCreated(
+          parsed.data.courierId,
+          parsed.data.amount,
+          parsed.data.notes ?? '',
+          diffAmount,
+          diffAmount !== 0 ? differenceReason : null
+        )
+        onClose()
+      } finally {
+        setIsSubmitting(false)
       }
-      onCreated(
-        parsed.data.courierId,
-        parsed.data.amount,
-        parsed.data.notes ?? '',
-        diffAmount,
-        diffAmount !== 0 ? differenceReason : null
-      )
-      onClose()
     })
   }
 
@@ -331,16 +338,16 @@ function SettlementModal({
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isSubmitting}
               className={`flex-1 h-11 px-5 rounded-xl text-white text-sm font-medium shadow-sm transition flex items-center justify-center gap-1.5 ${
                 isExactBalance
                   ? 'bg-emerald-600 hover:bg-emerald-700'
                   : 'bg-primary hover:bg-primary-hover'
-              } disabled:opacity-50`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <span>{isExactBalance ? '✓' : ''}</span>
               <span>
-                {isPending
+                {isPending || isSubmitting
                   ? 'Enregistrement...'
                   : isExactBalance
                   ? 'Valider le règlement & Clôturer la journée'
@@ -370,6 +377,7 @@ function CourierSettlementCard({
   const isOverpaid = (row.overpaidAmount ?? 0) > 0
   const [typed, setTyped] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const amountStr = typed ?? String(expected)
@@ -378,6 +386,7 @@ function CourierSettlementCard({
   const isExact = hasDue && diff === 0
 
   function handleSubmit() {
+    if (isSubmitting || isPending) return
     setError(null)
     const parsed = createSettlementSchema.safeParse({
       courierId: row.courierId,
@@ -389,14 +398,19 @@ function CourierSettlementCard({
       setError(parsed.error.issues[0]?.message ?? 'Montant invalide.')
       return
     }
+    setIsSubmitting(true)
     startTransition(async () => {
-      const res = await createCourierSettlement(parsed.data)
-      if (res.error) {
-        setError(res.error)
-        return
+      try {
+        const res = await createCourierSettlement(parsed.data)
+        if (res.error) {
+          setError(res.error)
+          return
+        }
+        setTyped(null)
+        onSettled(parsed.data.courierId, parsed.data.amount)
+      } finally {
+        setIsSubmitting(false)
       }
-      setTyped(null)
-      onSettled(parsed.data.courierId, parsed.data.amount)
     })
   }
 
@@ -487,12 +501,12 @@ function CourierSettlementCard({
             </button>
             <button
               type="button"
-              disabled={isPending || numeric <= 0}
+              disabled={isPending || isSubmitting || numeric <= 0}
               onClick={handleSubmit}
               className="h-11 px-5 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               <Check className="w-4 h-4" strokeWidth={1.75} />
-              {isPending ? 'Enregistrement…' : 'Valider le versement'}
+              {isPending || isSubmitting ? 'Enregistrement…' : 'Valider le versement'}
             </button>
           </div>
         </div>

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { assertStoreNotSuspended } from '@/lib/supabase/store-status'
+import { getLomeDayStartIso } from '@/lib/utils/lome-time'
 import {
   createOrderSchema,
   updateOrderStatusSchema,
@@ -106,8 +108,7 @@ export async function checkExistingDailyOrderByPhone(phone: string) {
       return { hasExistingOrder: false }
     }
 
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
+    const todayStartIso = getLomeDayStartIso()
 
     // Recherche des clients de l'entreprise dont le numéro correspond aux 8 derniers chiffres
     const { data: customers } = await supabase
@@ -131,7 +132,7 @@ export async function checkExistingDailyOrderByPhone(phone: string) {
       .select('id, parcel_number, status, created_at, ordered_at, delivery_fee')
       .eq('company_id', profile.company_id)
       .in('customer_id', customerIds)
-      .gte('created_at', todayStart.toISOString())
+      .gte('created_at', todayStartIso)
       .in('status', ['pending_confirmation', 'confirmed', 'packed', 'pending'])
 
     if (orders && orders.length > 0) {
@@ -181,6 +182,15 @@ export async function createOrder(rawData: CreateOrderInput) {
 
   if (profile.role === 'courier') {
     return { error: 'Action non autorisée pour ce rôle.' }
+  }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) {
+    return { error: subCheck.error }
   }
 
   const input = parsed.data
@@ -1021,4 +1031,43 @@ export async function cancelOrder(orderId: string) {
   revalidatePath('/dashboard')
 
   return { success: true }
+}
+
+export async function archiveOrder(orderId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non authentifié.' }
+
+  const profile = await getOrCreateProfile(supabase, user)
+  if (!profile.company_id || profile.role === 'courier') {
+    return { error: 'Action non autorisée.' }
+  }
+
+  const subCheck = await assertStoreNotSuspended(
+    supabase,
+    user.id,
+    profile.company_id
+  )
+  if (!subCheck.allowed) return { error: subCheck.error }
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ is_archived: true, status: 'cancelled' })
+    .eq('id', orderId)
+    .eq('company_id', profile.company_id)
+
+  if (error) {
+    await supabase
+      .from('orders')
+      .update({ status: 'cancelled' })
+      .eq('id', orderId)
+      .eq('company_id', profile.company_id)
+  }
+
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/commandes')
+  revalidatePath('/dashboard')
+  return { success: true as const }
 }

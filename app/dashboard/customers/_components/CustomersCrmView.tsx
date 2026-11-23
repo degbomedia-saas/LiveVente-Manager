@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react'
 import { toWhatsAppUrl } from '@/lib/validations/orders'
+import { ServerPagination } from '@/components/ui/ServerPagination'
 
 export interface CrmCustomerRow {
   id: string
@@ -31,9 +32,15 @@ type Lang = 'fr' | 'en'
 export function CustomersCrmView({
   customers,
   loyaltyThreshold = 5,
+  currentPage = 1,
+  totalCount,
+  pageSize = 20,
 }: {
   customers: CrmCustomerRow[]
   loyaltyThreshold?: number
+  currentPage?: number
+  totalCount?: number
+  pageSize?: number
 }) {
   const [search, setSearch] = useState('')
   const [lang, setLang] = useState<Lang>('fr')
@@ -58,8 +65,8 @@ export function CustomersCrmView({
           </h1>
           <p className="text-sm text-[#64748B] mt-0.5">
             {lang === 'fr'
-              ? `${customers.length} client(e)s • Synchronisation automatique à chaque commande`
-              : `${customers.length} customers • Auto-synced on every order`}
+              ? `${totalCount ?? customers.length} client(e)s • Synchronisation automatique à chaque commande`
+              : `${totalCount ?? customers.length} customers • Auto-synced on every order`}
           </p>
         </div>
 
@@ -217,6 +224,14 @@ export function CustomersCrmView({
           })}
         </div>
       )}
+
+      <ServerPagination
+        currentPage={currentPage}
+        totalCount={totalCount ?? customers.length}
+        pageSize={pageSize}
+        basePath="/dashboard/customers"
+        lang={lang}
+      />
     </div>
   )
 }

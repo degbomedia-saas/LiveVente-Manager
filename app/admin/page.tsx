@@ -8,11 +8,23 @@ import type { SubscriptionStatus } from '@/types/database.types'
 import {
   SuperAdminControlView,
   type SubscriptionRequestItem,
+  type SystemLogItem,
 } from './_components/SuperAdminControlView'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminPage() {
+const PAGE_SIZE = 20
+
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const params = await searchParams
+  const currentPage = Math.max(1, Number(params.page) || 1)
+  const from = (currentPage - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -38,12 +50,14 @@ export default async function AdminPage() {
     ordersRes,
     requestsRes,
     storesRes,
+    systemLogsRes,
   ] = await Promise.all([
     supabase.from('platform_settings').select('*').limit(1).maybeSingle(),
     supabase
       .from('companies')
-      .select('id, name, created_at')
-      .order('created_at', { ascending: false }),
+      .select('id, name, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to),
     supabase
       .from('subscriptions')
       .select(
@@ -56,9 +70,15 @@ export default async function AdminPage() {
       .select('*')
       .order('created_at', { ascending: false }),
     supabase.from('stores').select('id, store_name'),
+    supabase
+      .from('system_logs')
+      .select('id, level, source, message, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20),
   ])
 
   const companies = companiesRes.data ?? []
+  const totalStoresCount = companiesRes.count ?? companies.length
   const subscriptions = subscriptionsRes.data ?? []
   const profiles = profilesRes.data ?? []
   const orders = ordersRes.data ?? []
@@ -189,7 +209,7 @@ export default async function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <AdminMetrics
-          totalStores={companies.length}
+          totalStores={totalStoresCount}
           activeStores={activeStores}
           trialStores={trialStores}
           expiredStores={expiredStores}
@@ -210,7 +230,17 @@ export default async function AdminPage() {
             Number(platformRes.data?.free_mvp_max_ai_trials) || 3
           }
           initialProDrivers={Number(platformRes.data?.pro_max_drivers) || 3}
+          initialMaintenanceMode={Boolean(
+            platformRes.data?.is_maintenance_mode
+          )}
+          initialMaintenanceMessage={
+            platformRes.data?.maintenance_message ?? null
+          }
+          initialSystemLogs={(systemLogsRes.data ?? []) as SystemLogItem[]}
           stores={storeRows}
+          totalStoresCount={totalStoresCount}
+          currentPage={currentPage}
+          pageSize={PAGE_SIZE}
           requests={requestItems}
         />
       </main>

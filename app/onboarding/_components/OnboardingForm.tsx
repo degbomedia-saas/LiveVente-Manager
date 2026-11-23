@@ -16,6 +16,11 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { completeSellerOnboarding } from '@/app/actions/onboarding'
 import { DEFAULT_LOME_ZONES } from '@/lib/config/lome-zones'
+import {
+  compressImageForUpload,
+  compressImageToDataUrl,
+  validateImageFile,
+} from '@/lib/utils/compress-image'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
 import type { StorePaletteKey } from '@/types/database.types'
 
@@ -124,19 +129,24 @@ export function OnboardingForm({
 
   async function handleLogoChange(file: File | undefined) {
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      setError('Veuillez choisir une image PNG, JPG ou WebP.')
+    const check = validateImageFile(file)
+    if (!check.valid) {
+      setError(check.error)
       return
     }
     setUploading(true)
     setError(null)
     try {
+      // Compression côté client (Canvas HTML5, max 1000px, qualité JPEG 0.75) avant envoi Supabase Storage
+      const compressedFile = await compressImageForUpload(file, 1000, 0.75)
       const supabase = createClient()
-      const ext = (file.name.split('.').pop() || 'png').toLowerCase()
-      const path = `stores/${userId}/logo-${Date.now()}.${ext}`
+      const path = `stores/${userId}/logo-${Date.now()}.jpg`
       const { error: uploadErr } = await supabase.storage
         .from('store-assets')
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(path, compressedFile, {
+          upsert: true,
+          contentType: 'image/jpeg',
+        })
 
       if (!uploadErr) {
         const { data: pub } = supabase.storage
@@ -148,7 +158,7 @@ export function OnboardingForm({
           return
         }
       }
-      const dataUrl = await compressLogoToDataUrl(file)
+      const dataUrl = await compressImageToDataUrl(file, 1000, 0.75)
       setLogoUrl(dataUrl)
     } catch {
       setError('Impossible de charger ce logo.')

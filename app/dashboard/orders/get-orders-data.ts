@@ -8,7 +8,11 @@ import type {
   OrderRow,
 } from './_components/OrdersView'
 
-export async function getOrdersViewData() {
+export async function getOrdersViewData(page = 1, pageSize = 20) {
+  const safePage = Math.max(1, Math.floor(Number(page) || 1))
+  const from = (safePage - 1) * pageSize
+  const to = from + pageSize - 1
+
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -20,11 +24,17 @@ export async function getOrdersViewData() {
   }
 
   let ordersList: any[] = []
+  let totalOrdersCount = 0
 
-  // 1. Essai avec sélection complète incluant parcel_number
-  const { data: fullOrders, error: ordersErr } = await supabase
+  // 1. Essai avec sélection complète incluant parcel_number + pagination .range() + count: 'exact'
+  const {
+    data: fullOrders,
+    count: fullCount,
+    error: ordersErr,
+  } = await supabase
     .from('orders')
-    .select(`
+    .select(
+      `
       id,
       parcel_number,
       status,
@@ -36,16 +46,25 @@ export async function getOrdersViewData() {
       order_items(id, product_name, quantity, unit_price, subtotal),
       deliveries(id, status, courier_id, delivery_address, profiles(full_name, phone)),
       payments(id, amount, method, status, reference, paid_at)
-    `)
+    `,
+      { count: 'exact' }
+    )
     .order('ordered_at', { ascending: false })
+    .range(from, to)
 
   if (!ordersErr && fullOrders) {
     ordersList = fullOrders
+    totalOrdersCount = fullCount ?? fullOrders.length
   } else {
     // 2. Repli si parcel_number n'existe pas encore en base
-    const { data: ordersWithoutParcel, error: errWithoutParcel } = await supabase
+    const {
+      data: ordersWithoutParcel,
+      count: countWithoutParcel,
+      error: errWithoutParcel,
+    } = await supabase
       .from('orders')
-      .select(`
+      .select(
+        `
         id,
         status,
         total_amount,
@@ -56,15 +75,20 @@ export async function getOrdersViewData() {
         order_items(id, product_name, quantity, unit_price, subtotal),
         deliveries(id, status, courier_id, delivery_address, profiles(full_name, phone)),
         payments(id, amount, method, status, reference, paid_at)
-      `)
+      `,
+        { count: 'exact' }
+      )
       .order('ordered_at', { ascending: false })
+      .range(from, to)
 
     if (!errWithoutParcel && ordersWithoutParcel) {
       ordersList = ordersWithoutParcel
+      totalOrdersCount = countWithoutParcel ?? ordersWithoutParcel.length
     } else {
-      const { data: basicOrders } = await supabase
+      const { data: basicOrders, count: basicCount } = await supabase
         .from('orders')
-        .select(`
+        .select(
+          `
           id,
           status,
           total_amount,
@@ -73,10 +97,14 @@ export async function getOrdersViewData() {
           ordered_at,
           customers(full_name, phone, city, address),
           order_items(id, product_name, quantity, unit_price, subtotal)
-        `)
+        `,
+          { count: 'exact' }
+        )
         .order('ordered_at', { ascending: false })
+        .range(from, to)
 
       ordersList = basicOrders ?? []
+      totalOrdersCount = basicCount ?? ordersList.length
     }
   }
 
@@ -116,6 +144,9 @@ export async function getOrdersViewData() {
   return {
     profile,
     orders: normalizedOrders as unknown as OrderRow[],
+    totalOrdersCount,
+    currentPage: safePage,
+    pageSize,
     customers: (customers ?? []) as OrderCustomerOption[],
     couriers: (couriers ?? []) as OrderCourierOption[],
     products: (products ?? []) as OrderProductOption[],

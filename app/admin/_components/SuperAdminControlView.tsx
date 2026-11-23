@@ -1,10 +1,23 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Settings, ShieldCheck, Smartphone, X } from 'lucide-react'
 import {
+  Activity,
+  AlertTriangle,
+  Check,
+  Globe,
+  RefreshCw,
+  Settings,
+  Smartphone,
+  Trash2,
+  Wrench,
+  X,
+} from 'lucide-react'
+import {
+  clearAdminSystemLogs,
   handleSubscriptionRequest,
+  recordAdminSystemLog,
   updatePlatformSettings,
 } from '@/app/actions/step4'
 import { useBrandConfig } from '@/lib/config/brand'
@@ -24,6 +37,23 @@ export interface SubscriptionRequestItem {
   created_at: string
 }
 
+export interface SystemLogItem {
+  id: string
+  level: 'info' | 'warning' | 'error' | 'critical'
+  source: string
+  message: string
+  created_at: string
+}
+
+interface HealthCheckState {
+  status: 'ok' | 'degraded' | 'loading'
+  supabase: 'connected' | 'disconnected'
+  latencyMs: number | null
+  timestamp: string | null
+}
+
+type Lang = 'fr' | 'en'
+
 export function SuperAdminControlView({
   initialSaasName,
   initialSaasLogoUrl,
@@ -31,7 +61,13 @@ export function SuperAdminControlView({
   initialFreeDrivers = 1,
   initialFreeAiTrials = 3,
   initialProDrivers = 3,
+  initialMaintenanceMode = false,
+  initialMaintenanceMessage = '',
+  initialSystemLogs = [],
   stores,
+  totalStoresCount,
+  currentPage = 1,
+  pageSize = 20,
   requests,
 }: {
   initialSaasName: string
@@ -40,11 +76,18 @@ export function SuperAdminControlView({
   initialFreeDrivers?: number
   initialFreeAiTrials?: number
   initialProDrivers?: number
+  initialMaintenanceMode?: boolean
+  initialMaintenanceMessage?: string | null
+  initialSystemLogs?: SystemLogItem[]
   stores: SuperAdminStoreRow[]
+  totalStoresCount?: number
+  currentPage?: number
+  pageSize?: number
   requests: SubscriptionRequestItem[]
 }) {
   const router = useRouter()
   const { setBrand } = useBrandConfig()
+  const [lang, setLang] = useState<Lang>('fr')
 
   const [saasName, setSaasName] = useState(initialSaasName)
   const [saasLogoUrl, setSaasLogoUrl] = useState(initialSaasLogoUrl ?? '')
@@ -52,13 +95,66 @@ export function SuperAdminControlView({
   const [freeDrivers, setFreeDrivers] = useState(initialFreeDrivers)
   const [freeAiTrials, setFreeAiTrials] = useState(initialFreeAiTrials)
   const [proDrivers, setProDrivers] = useState(initialProDrivers)
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(
+    initialMaintenanceMode
+  )
+  const [maintenanceMessage, setMaintenanceMessage] = useState(
+    initialMaintenanceMessage ??
+      'Maintenance technique en cours sur Kaba Kaba. Nous revenons très vite !'
+  )
+
   const [reqList, setReqList] = useState<SubscriptionRequestItem[]>(requests)
+  const [logs, setLogs] = useState<SystemLogItem[]>(initialSystemLogs)
+  const [health, setHealth] = useState<HealthCheckState>({
+    status: 'loading',
+    supabase: 'connected',
+    latencyMs: null,
+    timestamp: null,
+  })
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleSavePlatform(e: React.FormEvent) {
-    e.preventDefault()
+  async function checkHealth() {
+    setHealth((prev) => ({ ...prev, status: 'loading' }))
+    try {
+      const res = await fetch('/api/health', { cache: 'no-store' })
+      const json = await res.json()
+      setHealth({
+        status: json.status === 'ok' ? 'ok' : 'degraded',
+        supabase:
+          json.supabase === 'connected' ? 'connected' : 'disconnected',
+        latencyMs:
+          typeof json.latencyMs === 'number' ? json.latencyMs : null,
+        timestamp: json.timestamp ?? new Date().toISOString(),
+      })
+    } catch {
+      setHealth({
+        status: 'degraded',
+        supabase: 'disconnected',
+        latencyMs: null,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  }
+
+  useEffect(() => {
+    void checkHealth()
+  }, [])
+
+  useEffect(() => {
+    setLogs(initialSystemLogs)
+  }, [initialSystemLogs])
+
+  function handleSavePlatform(
+    e?: React.FormEvent,
+    overrideMaintenance?: boolean
+  ) {
+    if (e) e.preventDefault()
     setFeedback(null)
+    const nextMaint =
+      typeof overrideMaintenance === 'boolean'
+        ? overrideMaintenance
+        : isMaintenanceMode
 
     startTransition(async () => {
       setBrand((prev) => ({
@@ -74,15 +170,26 @@ export function SuperAdminControlView({
         freeMvpMaxDrivers: freeDrivers,
         freeMvpMaxAiTrials: freeAiTrials,
         proMaxDrivers: proDrivers,
+        isMaintenanceMode: nextMaint,
+        maintenanceMessage: maintenanceMessage.trim() || null,
       })
 
       setFeedback(
         'error' in res && res.error
           ? res.error
-          : 'Configuration globale & Quotas SaaS (platform_settings) enregistrés.'
+          : lang === 'fr'
+            ? 'Configuration globale, Mode Maintenance & Quotas SaaS enregistrés.'
+            : 'Global settings, Maintenance Mode & SaaS Quotas saved.'
       )
+      void checkHealth()
       router.refresh()
     })
+  }
+
+  function handleToggleMaintenance() {
+    const nextValue = !isMaintenanceMode
+    setIsMaintenanceMode(nextValue)
+    handleSavePlatform(undefined, nextValue)
   }
 
   function handleDecision(
@@ -109,17 +216,351 @@ export function SuperAdminControlView({
     })
   }
 
+  function handleTestErrorLog() {
+    startTransition(async () => {
+      const res = await recordAdminSystemLog({
+        level: 'error',
+        source: '/admin (test)',
+        message:
+          lang === 'fr'
+            ? 'Test de journalisation erreur serveur (system_logs)'
+            : 'Server error log test entry (system_logs)',
+      })
+      if ('error' in res && res.error) {
+        setFeedback(
+          `Exécutez supabase/migrations/023_maintenance_and_system_logs.sql (${res.error})`
+        )
+      } else {
+        setFeedback(
+          lang === 'fr'
+            ? 'Entrée de test enregistrée dans system_logs.'
+            : 'Test entry recorded in system_logs.'
+        )
+        router.refresh()
+      }
+    })
+  }
+
+  function handleClearLogs() {
+    startTransition(async () => {
+      const res = await clearAdminSystemLogs()
+      if (!('error' in res && res.error)) {
+        setLogs([])
+        setFeedback(
+          lang === 'fr'
+            ? 'Journaux system_logs purgés.'
+            : 'System logs cleared.'
+        )
+        router.refresh()
+      }
+    })
+  }
+
   return (
     <div className="space-y-8">
+      {/* Sélecteur de langue FR / EN */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          {lang === 'fr'
+            ? 'Pilotage Production & Fiabilité Kaba Kaba'
+            : 'Production Reliability & Kaba Kaba Control'}
+        </p>
+        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-bold">
+          <Globe className="w-3.5 h-3.5 text-slate-500 ml-2 mr-1" />
+          <button
+            type="button"
+            onClick={() => setLang('fr')}
+            className={`px-2.5 py-1 rounded-lg cursor-pointer ${
+              lang === 'fr'
+                ? 'bg-[#0F172A] text-white'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            FR
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={`px-2.5 py-1 rounded-lg cursor-pointer ${
+              lang === 'en'
+                ? 'bg-[#0F172A] text-white'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            EN
+          </button>
+        </div>
+      </div>
+
       {feedback && (
         <div className="rounded-2xl bg-[#ECFDF5] border border-[#A7F3D0] px-4 py-3 text-xs sm:text-sm font-semibold text-[#065F46]">
           {feedback}
         </div>
       )}
 
+      {/* 0. Mode Maintenance ON/OFF + Santé Supabase (/api/health) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Carte Mode Maintenance */}
+        <div
+          className={`rounded-2xl border p-6 shadow-2xs space-y-4 transition ${
+            isMaintenanceMode
+              ? 'bg-amber-50/70 border-amber-300'
+              : 'bg-white border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                  isMaintenanceMode
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-[#0F172A]">
+                  {lang === 'fr'
+                    ? 'Mode Maintenance (/maintenance)'
+                    : 'Maintenance Mode (/maintenance)'}
+                </h2>
+                <p className="text-xs text-[#64748B]">
+                  {lang === 'fr'
+                    ? 'Redirige le trafic vers /maintenance (sauf /admin, /login, /api/health).'
+                    : 'Redirects users to /maintenance (except /admin, /login, /api/health).'}
+                </p>
+              </div>
+            </div>
+
+            {/* Interrupteur ON / OFF */}
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleToggleMaintenance}
+              aria-pressed={isMaintenanceMode}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer ${
+                isMaintenanceMode
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  isMaintenanceMode ? 'bg-white animate-pulse' : 'bg-slate-500'
+                }`}
+              />
+              <span>{isMaintenanceMode ? 'ON (ACTIF)' : 'OFF'}</span>
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#0F172A] mb-1">
+              {lang === 'fr'
+                ? 'Message affiché sur /maintenance'
+                : 'Message displayed on /maintenance'}
+            </label>
+            <textarea
+              rows={2}
+              value={maintenanceMessage}
+              onChange={(e) => setMaintenanceMessage(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-[#0F172A]"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] font-semibold text-slate-500">
+              platform_settings.is_maintenance_mode
+            </span>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => handleSavePlatform()}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F172A] hover:bg-slate-800 text-white transition cursor-pointer"
+            >
+              {lang === 'fr' ? 'Mettre à jour le message' : 'Update message'}
+            </button>
+          </div>
+        </div>
+
+        {/* Carte Santé Supabase GET /api/health */}
+        <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                  health.status === 'ok'
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : 'bg-rose-50 text-rose-600'
+                }`}
+              >
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-[#0F172A]">
+                  {lang === 'fr'
+                    ? 'Santé Système (GET /api/health)'
+                    : 'System Health (GET /api/health)'}
+                </h2>
+                <p className="text-xs text-[#64748B]">
+                  {lang === 'fr'
+                    ? 'Vérification en direct de la connexion PostgreSQL / Supabase'
+                    : 'Live PostgreSQL / Supabase connectivity probe'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void checkHealth()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${
+                  health.status === 'loading' ? 'animate-spin' : ''
+                }`}
+              />
+              <span>{lang === 'fr' ? 'Tester' : 'Probe'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <p className="text-[11px] font-semibold text-slate-500">
+                Supabase DB
+              </p>
+              <p
+                className={`text-sm font-extrabold mt-0.5 ${
+                  health.supabase === 'connected'
+                    ? 'text-emerald-600'
+                    : 'text-rose-600'
+                }`}
+              >
+                ●{' '}
+                {health.supabase === 'connected'
+                  ? lang === 'fr'
+                    ? 'Connecté'
+                    : 'Connected'
+                  : lang === 'fr'
+                    ? 'Déconnecté'
+                    : 'Disconnected'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <p className="text-[11px] font-semibold text-slate-500">
+                {lang === 'fr' ? 'Latence SQL' : 'SQL Latency'}
+              </p>
+              <p className="text-sm font-extrabold text-[#0F172A] mt-0.5 tabular-nums">
+                {health.latencyMs !== null ? `${health.latencyMs} ms` : '—'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 col-span-2 sm:col-span-1">
+              <p className="text-[11px] font-semibold text-slate-500">
+                Endpoint
+              </p>
+              <a
+                href="/api/health"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono font-bold text-[#0284C7] hover:underline mt-1 inline-block"
+              >
+                GET /api/health ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Journaux d'erreurs serveur (system_logs - RLS Admin uniquement) */}
+      <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold text-[#0F172A]">
+                {lang === 'fr'
+                  ? 'Journaux Système & Erreurs Serveur (system_logs)'
+                  : 'System & Server Error Logs (system_logs)'}
+              </h2>
+              <p className="text-xs text-[#64748B]">
+                {lang === 'fr'
+                  ? 'Protégé par RLS (visible uniquement par Super Admin).'
+                  : 'Protected by RLS (Admin read-only).'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleTestErrorLog}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+            >
+              {lang === 'fr' ? '+ Simuler un log' : '+ Log test entry'}
+            </button>
+            {logs.length > 0 && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleClearLogs}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{lang === 'fr' ? 'Vider' : 'Clear'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {logs.length === 0 ? (
+          <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-4 py-4 text-xs text-slate-500">
+            {lang === 'fr'
+              ? 'Aucune erreur serveur récente dans system_logs.'
+              : 'No recent server errors in system_logs.'}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className="p-3.5 bg-white hover:bg-slate-50/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded-md font-extrabold uppercase text-[10px] ${
+                        log.level === 'critical' || log.level === 'error'
+                          ? 'bg-rose-100 text-rose-800'
+                          : log.level === 'warning'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-sky-100 text-sky-800'
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <span className="font-mono font-bold text-slate-700">
+                      [{log.source}]
+                    </span>
+                  </div>
+                  <p className="text-slate-900 font-medium">{log.message}</p>
+                </div>
+                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                  {new Date(log.created_at).toLocaleString('fr-FR')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 1. Configuration globale du SaaS (platform_settings) */}
       <form
-        onSubmit={handleSavePlatform}
+        onSubmit={(e) => handleSavePlatform(e)}
         className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] p-6 shadow-2xs space-y-4"
       >
         <div className="flex items-center gap-2.5">
@@ -327,8 +768,15 @@ export function SuperAdminControlView({
         )}
       </div>
 
-      {/* 3. Tableau de tous les vendeurs abonnés (Activer / Suspendre / +30 jours) */}
-      <StoresManagementTable stores={stores} />
+      {/* 3. Tableau paginé des vendeurs abonnés (.range() + count: 'exact', 20/page) */}
+      <StoresManagementTable
+        stores={stores}
+        currentPage={currentPage}
+        totalCount={totalStoresCount ?? stores.length}
+        pageSize={pageSize}
+        basePath="/admin"
+        lang={lang}
+      />
     </div>
   )
 }

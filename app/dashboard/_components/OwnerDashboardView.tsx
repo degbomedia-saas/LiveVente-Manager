@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DailyCashSummaryModal } from '@/components/dashboard/DailyCashSummaryModal'
+import { getLomeDateKey, isInPeriodLome } from '@/lib/utils/lome-time'
 
 export interface DashboardOrderItem {
   id: string
@@ -48,24 +49,7 @@ function formatMoney(amount: number) {
 }
 
 function isInPeriod(dateStr: string | null | undefined, period: PeriodFilter): boolean {
-  if (!dateStr) return false
-  const target = new Date(dateStr)
-  if (Number.isNaN(target.getTime())) return false
-
-  const now = new Date()
-  if (period === 'today') {
-    return (
-      target.getFullYear() === now.getFullYear() &&
-      target.getMonth() === now.getMonth() &&
-      target.getDate() === now.getDate()
-    )
-  }
-
-  const days = period === '7d' ? 6 : 29
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
-  start.setDate(start.getDate() - days)
-  return target >= start
+  return isInPeriodLome(dateStr, period)
 }
 
 function getOrderBadge(status: string, hasFailedDelivery: boolean) {
@@ -203,16 +187,16 @@ export default function OwnerDashboardView({
       ).padStart(2, '0')}`
       const dayOrders = orders.filter((o) => {
         if (o.status === 'cancelled') return false
-        const od = new Date(o.ordered_at)
-        return (
-          od.getFullYear() === d.getFullYear() &&
-          od.getMonth() === d.getMonth() &&
-          od.getDate() === d.getDate()
-        )
+        return getLomeDateKey(o.ordered_at) === key
       })
       chartDays.push({
         key,
-        label: d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', ''),
+        label: d
+          .toLocaleDateString('fr-FR', {
+            timeZone: 'Africa/Lome',
+            weekday: 'short',
+          })
+          .replace('.', ''),
         amount: dayOrders.reduce((s, o) => s + Number(o.total_amount), 0),
         count: dayOrders.length,
         isToday: offset === 0,
@@ -256,6 +240,76 @@ export default function OwnerDashboardView({
 
   return (
     <div className="space-y-6">
+      {/* Checklist démarrage 3 étapes (si 0 commande) */}
+      {orders.length === 0 && (
+        <section className="rounded-2xl bg-gradient-to-br from-[#ECFDF5] via-white to-[#F0F9FF] border border-[#A7F3D0] p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10B981]/15 text-[#065F46] text-[11px] font-extrabold uppercase tracking-wider">
+                Checklist Kaba Kaba
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-[#0F172A] mt-1">
+                Démarrer en 3 étapes / Get started in 3 steps
+              </h2>
+            </div>
+            <span className="text-xs font-bold text-[#065F46]">0 / 3</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Link
+              href="/dashboard/products"
+              className="group rounded-2xl bg-white border border-slate-200 hover:border-[#10B981] p-4 shadow-2xs transition flex items-start gap-3"
+            >
+              <span className="h-8 w-8 rounded-xl bg-[#ECFDF5] text-[#10B981] font-black text-sm flex items-center justify-center shrink-0">
+                1
+              </span>
+              <div>
+                <p className="text-sm font-extrabold text-[#0F172A] group-hover:text-[#10B981] transition">
+                  Ajouter un produit
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Add your first product &amp; price
+                </p>
+              </div>
+            </Link>
+
+            <Link
+              href="/dashboard/settings"
+              className="group rounded-2xl bg-white border border-slate-200 hover:border-[#10B981] p-4 shadow-2xs transition flex items-start gap-3"
+            >
+              <span className="h-8 w-8 rounded-xl bg-[#F0F9FF] text-[#0284C7] font-black text-sm flex items-center justify-center shrink-0">
+                2
+              </span>
+              <div>
+                <p className="text-sm font-extrabold text-[#0F172A] group-hover:text-[#0284C7] transition">
+                  Régler mes zones
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Set Lomé delivery zones &amp; fees
+                </p>
+              </div>
+            </Link>
+
+            <Link
+              href="/dashboard/orders?new=1"
+              className="group rounded-2xl bg-white border border-slate-200 hover:border-[#10B981] p-4 shadow-2xs transition flex items-start gap-3"
+            >
+              <span className="h-8 w-8 rounded-xl bg-[#0F172A] text-white font-black text-sm flex items-center justify-center shrink-0">
+                3
+              </span>
+              <div>
+                <p className="text-sm font-extrabold text-[#0F172A] group-hover:text-[#10B981] transition">
+                  Dicter ou créer ma 1re commande
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dictate or create your 1st order
+                </p>
+              </div>
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* 1. En-tête + Sélecteur de période */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

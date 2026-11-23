@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Check, Copy, MessageCircle, Wallet, X } from 'lucide-react'
+import { formatLomeDateFr } from '@/lib/utils/lome-time'
 
 export interface DailyCashSummaryProps {
   isOpen: boolean
@@ -30,11 +31,7 @@ export function DailyCashSummaryModal({
 
   if (!isOpen) return null
 
-  const todayStr = new Date().toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  const todayStr = formatLomeDateFr(new Date())
 
   const summaryText = `📊 *BILAN DE CAISSE DU JOUR — ${companyName}* (${todayStr})
 • Total ventes : *${Math.round(totalSalesRevenueFcfa).toLocaleString('fr-FR')} FCFA* (${totalSalesCount} cmd)

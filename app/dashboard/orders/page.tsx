@@ -9,10 +9,20 @@ export const revalidate = 0
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string; tab?: string }>
+  searchParams: Promise<{ new?: string; tab?: string; page?: string }>
 }) {
   const params = await searchParams
-  const { profile, orders, customers, couriers, products } = await getOrdersViewData()
+  const requestedPage = Math.max(1, Number(params.page) || 1)
+  const {
+    profile,
+    orders,
+    totalOrdersCount,
+    currentPage,
+    pageSize,
+    customers,
+    couriers,
+    products,
+  } = await getOrdersViewData(requestedPage, 20)
 
   // Si l'utilisateur arrive avec tab=packing, on passe en mode packing
   const isPacking = params.tab === 'packing'
@@ -36,6 +46,10 @@ export default async function OrdersPage({
         initialOpenModal={params.new === '1'}
         mode={isPacking ? 'packing' : 'orders'}
         initialOrdersTab={initialOrdersTab}
+        currentPage={currentPage}
+        totalOrdersCount={totalOrdersCount}
+        pageSize={pageSize}
+        currentTabParam={params.tab}
       />
     </DashboardLayout>
   )

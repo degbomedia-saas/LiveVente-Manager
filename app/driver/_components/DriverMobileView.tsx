@@ -15,6 +15,11 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
+  compressImageForUpload,
+  compressImageToDataUrl,
+  validateImageFile,
+} from '@/lib/utils/compress-image'
+import {
   submitDriverDeliveryPod,
   type DeliveryFailureReason,
 } from '@/app/actions/step4'
@@ -70,6 +75,7 @@ export function DriverMobileView({
   )
   const [modalError, setModalError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const todoCourses = courses.filter((c) => c.status !== 'delivered')
@@ -81,14 +87,24 @@ export function DriverMobileView({
 
   async function handlePhotoUpload(file: File | undefined) {
     if (!file) return
+    const check = validateImageFile(file)
+    if (!check.valid) {
+      setModalError(check.error)
+      return
+    }
+    setModalError(null)
     setUploading(true)
     try {
+      // Compression côté client (Canvas HTML5, max 1000px, qualité JPEG 0.75) avant envoi Supabase Storage
+      const compressedFile = await compressImageForUpload(file, 1000, 0.75)
       const supabase = createClient()
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-      const path = `pod/pod-${Date.now()}.${ext}`
+      const path = `pod/pod-${Date.now()}.jpg`
       const { error } = await supabase.storage
         .from('delivery-proofs')
-        .upload(path, file, { upsert: true })
+        .upload(path, compressedFile, {
+          upsert: true,
+          contentType: 'image/jpeg',
+        })
 
       if (!error) {
         const { data: pub } = supabase.storage
@@ -101,19 +117,16 @@ export function DriverMobileView({
         }
       }
 
-      const reader = new FileReader()
-      reader.onload = () => {
-        setPhotoUrl(reader.result as string)
-        setUploading(false)
-      }
-      reader.readAsDataURL(file)
+      const compressedDataUrl = await compressImageToDataUrl(file, 1000, 0.75)
+      setPhotoUrl(compressedDataUrl)
+      setUploading(false)
     } catch {
       setUploading(false)
     }
   }
 
   function handleValidateAttempt() {
-    if (!activeCourse) return
+    if (!activeCourse || isSubmitting || isPending || uploading) return
     setModalError(null)
 
     if (outcome === 'delivered' && !recipientName.trim()) {
@@ -128,44 +141,49 @@ export function DriverMobileView({
         ? Number(codCollected) || activeCourse.totalCodFcfa
         : 0
 
+    setIsSubmitting(true)
     startTransition(async () => {
-      const res = await submitDriverDeliveryPod({
-        deliveryId: activeCourse.deliveryId,
-        orderId: activeCourse.orderId,
-        outcome,
-        recipientName: outcome === 'delivered' ? recipientName.trim() : undefined,
-        failureReason: outcome === 'failed' ? failureReason : undefined,
-        proofPhotoUrl: photoUrl,
-        codAmountCollected: amount,
-        codStatus: outcome === 'delivered' ? codStatus : 'not_applicable',
-      })
+      try {
+        const res = await submitDriverDeliveryPod({
+          deliveryId: activeCourse.deliveryId,
+          orderId: activeCourse.orderId,
+          outcome,
+          recipientName: outcome === 'delivered' ? recipientName.trim() : undefined,
+          failureReason: outcome === 'failed' ? failureReason : undefined,
+          proofPhotoUrl: photoUrl,
+          codAmountCollected: amount,
+          codStatus: outcome === 'delivered' ? codStatus : 'not_applicable',
+        })
 
-      if ('error' in res && res.error) {
-        setModalError(res.error)
-        return
-      }
+        if ('error' in res && res.error) {
+          setModalError(res.error)
+          return
+        }
 
-      setCourses((prev) =>
-        prev.map((c) =>
-          c.orderId === activeCourse.orderId
-            ? {
-                ...c,
-                status: outcome === 'delivered' ? 'delivered' : c.status,
-                proofPhotoUrl: photoUrl,
-                codStatus,
-                attemptsCount: (c.attemptsCount ?? 0) + 1,
-                lastAttemptNote:
-                  outcome === 'delivered'
-                    ? `Livré à ${recipientName.trim()}`
-                    : `Tentative échouée : ${failureReason}`,
-              }
-            : c
+        setCourses((prev) =>
+          prev.map((c) =>
+            c.orderId === activeCourse.orderId
+              ? {
+                  ...c,
+                  status: outcome === 'delivered' ? 'delivered' : c.status,
+                  proofPhotoUrl: photoUrl,
+                  codStatus,
+                  attemptsCount: (c.attemptsCount ?? 0) + 1,
+                  lastAttemptNote:
+                    outcome === 'delivered'
+                      ? `Livré à ${recipientName.trim()}`
+                      : `Tentative échouée : ${failureReason}`,
+                }
+              : c
+          )
         )
-      )
-      setActiveCourse(null)
-      setPhotoUrl(null)
-      setRecipientName('')
-      router.refresh()
+        setActiveCourse(null)
+        setPhotoUrl(null)
+        setRecipientName('')
+        router.refresh()
+      } finally {
+        setIsSubmitting(false)
+      }
     })
   }
 
@@ -474,13 +492,13 @@ export function DriverMobileView({
               </button>
               <button
                 type="button"
-                disabled={isPending || uploading}
+                disabled={isPending || isSubmitting || uploading}
                 onClick={handleValidateAttempt}
-                className={`flex-1 py-3 rounded-xl text-xs font-bold text-white cursor-pointer ${
+                className={`flex-1 py-3 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   outcome === 'delivered' ? 'bg-[#10B981]' : 'bg-rose-600'
                 }`}
               >
-                {isPending
+                {isPending || isSubmitting
                   ? 'Enregistrement...'
                   : outcome === 'delivered'
                   ? 'Confirmer livraison'

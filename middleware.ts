@@ -11,17 +11,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Si on est sur la page d'accueil ou les pages publiques, ne JAMAIS rediriger vers /login
+  // Toujours laisser passer /api/health et le manifeste PWA sans redirection
   if (
-    pathname === '/' ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/register') ||
-    pathname.startsWith('/signup') ||
-    pathname.startsWith('/first-login') ||
-    pathname.startsWith('/track') ||
-    pathname.startsWith('/invite') ||
-    pathname.startsWith('/live') ||
-    pathname.startsWith('/api')
+    pathname.startsWith('/api/health') ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/manifest.json'
   ) {
     return NextResponse.next()
   }
@@ -56,6 +50,52 @@ export async function middleware(request: NextRequest) {
       },
     }
   )
+
+  // Vérification du Mode Maintenance global (platform_settings.is_maintenance_mode)
+  let isMaintenanceMode = false
+  try {
+    const { data: platformRow } = await supabase
+      .from('platform_settings')
+      .select('is_maintenance_mode')
+      .limit(1)
+      .maybeSingle()
+
+    isMaintenanceMode = Boolean(platformRow?.is_maintenance_mode)
+  } catch {
+    isMaintenanceMode = false
+  }
+
+  if (pathname.startsWith('/maintenance')) {
+    if (!isMaintenanceMode) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    return supabaseResponse
+  }
+
+  const isMaintenanceExempt =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/super-admin') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/api/health') ||
+    pathname.startsWith('/auth/')
+
+  if (isMaintenanceMode && !isMaintenanceExempt) {
+    return NextResponse.redirect(new URL('/maintenance', request.url))
+  }
+
+  // Si on est sur la page d'accueil ou les pages publiques, ne JAMAIS rediriger vers /login
+  if (
+    pathname === '/' ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/first-login') ||
+    pathname.startsWith('/track') ||
+    pathname.startsWith('/invite') ||
+    pathname.startsWith('/live') ||
+    pathname.startsWith('/api')
+  ) {
+    return supabaseResponse
+  }
 
   // ⚠️ Ne JAMAIS utiliser getSession() ici — utiliser getUser() pour sécurité
   const { data: { user } } = await supabase.auth.getUser()
@@ -116,6 +156,12 @@ export async function middleware(request: NextRequest) {
     }
 
     if (isAuthPage) {
+      if (isMaintenanceMode && isSuperAdmin) {
+        return NextResponse.redirect(new URL('/admin', request.url))
+      }
+      if (isMaintenanceMode && !isSuperAdmin) {
+        return supabaseResponse
+      }
       return NextResponse.redirect(
         new URL(isCourier ? '/mes-livraisons' : '/dashboard', request.url)
       )

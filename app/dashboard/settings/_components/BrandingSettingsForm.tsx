@@ -10,6 +10,11 @@ import {
   saveSellerDeliveryZones,
 } from '@/app/actions/onboarding'
 import { DEFAULT_LOME_ZONES } from '@/lib/config/lome-zones'
+import {
+  compressImageForUpload,
+  compressImageToDataUrl,
+  validateImageFile,
+} from '@/lib/utils/compress-image'
 import type { ThemePalette } from '@/lib/supabase/ensure-profile'
 
 const PALETTES: Array<{
@@ -158,10 +163,11 @@ export default function BrandingSettingsForm({
   }
 
   async function handleLogoFile(file: File) {
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    const check = validateImageFile(file)
+    if (!check.valid) {
       setStatusMessage({
         type: 'error',
-        text: 'Format non supporté. Utilisez PNG, JPG ou WebP.',
+        text: check.error,
       })
       return
     }
@@ -170,13 +176,17 @@ export default function BrandingSettingsForm({
     setUploadingLogo(true)
 
     try {
+      // Compression côté client (Canvas HTML5, max 1000px, qualité JPEG 0.75) avant envoi Supabase Storage
+      const compressedFile = await compressImageForUpload(file, 1000, 0.75)
       const supabase = createClient()
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-      const path = `${companyId}/logo-${Date.now()}.${ext}`
+      const path = `${companyId}/logo-${Date.now()}.jpg`
 
       const { error: uploadErr } = await supabase.storage
         .from('store-assets')
-        .upload(path, file, { upsert: true })
+        .upload(path, compressedFile, {
+          upsert: true,
+          contentType: 'image/jpeg',
+        })
 
       if (!uploadErr) {
         const { data: pub } = supabase.storage.from('store-assets').getPublicUrl(path)
@@ -187,8 +197,8 @@ export default function BrandingSettingsForm({
         }
       }
 
-      // Repli transparent en Data URL compressée si le bucket store-assets n'est pas encore créé
-      const dataUrl = await compressLogoToDataUrl(file)
+      // Repli transparent en Data URL compressée (max 1000px, JPEG 0.75) si le bucket store-assets n'est pas encore créé
+      const dataUrl = await compressImageToDataUrl(file, 1000, 0.75)
       setLogoUrl(dataUrl)
     } catch {
       setStatusMessage({

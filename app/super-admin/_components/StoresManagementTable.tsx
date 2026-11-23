@@ -10,6 +10,7 @@ import {
   Search,
 } from 'lucide-react'
 import { extendSubscription, toggleStoreStatus } from '@/app/actions/super-admin'
+import { ServerPagination } from '@/components/ui/ServerPagination'
 import type { SubscriptionStatus } from '@/types/database.types'
 
 export interface SuperAdminStoreRow {
@@ -89,8 +90,18 @@ function buildWhatsAppUrl(store: SuperAdminStoreRow, stateKey: 'active' | 'trial
 
 export function StoresManagementTable({
   stores,
+  currentPage = 1,
+  totalCount,
+  pageSize = 20,
+  basePath = '/admin',
+  lang = 'fr',
 }: {
   stores: SuperAdminStoreRow[]
+  currentPage?: number
+  totalCount?: number
+  pageSize?: number
+  basePath?: string
+  lang?: 'fr' | 'en'
 }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -433,6 +444,18 @@ export function StoresManagementTable({
             })}
           </div>
         </>
+      )}
+
+      {typeof totalCount === 'number' && (
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+          <ServerPagination
+            currentPage={currentPage}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            basePath={basePath}
+            lang={lang}
+          />
+        </div>
       )}
     </section>
   )

@@ -9,7 +9,18 @@ import {
 
 export const metadata = { title: 'Base Clients CRM — Kaba Kaba' }
 
-export default async function CustomersPage() {
+const PAGE_SIZE = 20
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const params = await searchParams
+  const currentPage = Math.max(1, Number(params.page) || 1)
+  const from = (currentPage - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
 
   const {
@@ -24,23 +35,35 @@ export default async function CustomersPage() {
   }
 
   let customersList: CrmCustomerRow[] = []
+  let totalCount = 0
 
-  const { data: fullCustomers, error: fullErr } = await supabase
+  const {
+    data: fullCustomers,
+    count: fullCount,
+    error: fullErr,
+  } = await supabase
     .from('customers')
     .select(
-      'id, full_name, phone, city, address, default_address, total_orders, total_spent_fcfa, loyalty_points, created_at'
+      'id, full_name, phone, city, address, default_address, total_orders, total_spent_fcfa, loyalty_points, created_at',
+      { count: 'exact' }
     )
     .order('created_at', { ascending: false })
+    .range(from, to)
 
   if (!fullErr && fullCustomers) {
     customersList = fullCustomers as CrmCustomerRow[]
+    totalCount = fullCount ?? fullCustomers.length
   } else {
-    const { data: baseCustomers } = await supabase
+    const { data: baseCustomers, count: baseCount } = await supabase
       .from('customers')
-      .select('id, full_name, phone, city, address, created_at')
+      .select('id, full_name, phone, city, address, created_at', {
+        count: 'exact',
+      })
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     customersList = (baseCustomers ?? []) as CrmCustomerRow[]
+    totalCount = baseCount ?? customersList.length
   }
 
   return (
@@ -51,7 +74,12 @@ export default async function CustomersPage() {
       logoUrl={profile.companies?.logo_url ?? null}
       themePalette={profile.companies?.theme_palette ?? 'emerald'}
     >
-      <CustomersCrmView customers={customersList} />
+      <CustomersCrmView
+        customers={customersList}
+        currentPage={currentPage}
+        totalCount={totalCount}
+        pageSize={PAGE_SIZE}
+      />
     </DashboardLayout>
   )
 }
