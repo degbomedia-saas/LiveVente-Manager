@@ -10,6 +10,15 @@ export const productSchema = z.object({
     .number()
     .min(0, 'Le prix doit être positif.')
     .max(100000000, 'Prix trop élevé.'),
+  sku: z.string().trim().max(60).optional().or(z.literal('')),
+  category: z.string().trim().max(80).optional().or(z.literal('')),
+  stockQty: z.coerce.number().int().min(0, 'Le stock doit être >= 0.').default(10),
+  lowStockThreshold: z.coerce
+    .number()
+    .int()
+    .min(0, 'Le seuil doit être >= 0.')
+    .default(3),
+  imageUrl: z.string().trim().max(2_500_000).optional().or(z.literal('')),
   sizesInput: z
     .string()
     .trim()

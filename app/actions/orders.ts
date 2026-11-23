@@ -203,22 +203,47 @@ export async function createOrder(rawData: CreateOrderInput) {
     customerPhone = normalizedPhone
     customerCityOrAddress = input.newCustomer.city?.trim() || ''
 
-    const { data: createdCustomer, error: customerError } = await supabase
+    // Rechercher d'abord une fiche cliente existante par téléphone (CRM auto-match)
+    const { data: matchedCustomer } = await supabase
       .from('customers')
-      .insert({
-        company_id: profile.company_id,
-        full_name: customerFullName,
-        phone: normalizedPhone,
-        city: customerCityOrAddress || null,
-      })
       .select('id, full_name, phone')
-      .single()
+      .eq('company_id', profile.company_id)
+      .eq('phone', normalizedPhone)
+      .maybeSingle()
 
-    if (customerError || !createdCustomer) {
-      return { error: 'Impossible de créer le client.' }
+    if (matchedCustomer) {
+      await supabase
+        .from('customers')
+        .update({
+          full_name: customerFullName || matchedCustomer.full_name,
+          city: customerCityOrAddress || undefined,
+        })
+        .eq('id', matchedCustomer.id)
+
+      customerId = matchedCustomer.id
+      newCustomerRow = {
+        id: matchedCustomer.id,
+        full_name: customerFullName || matchedCustomer.full_name,
+        phone: normalizedPhone,
+      }
+    } else {
+      const { data: createdCustomer, error: customerError } = await supabase
+        .from('customers')
+        .insert({
+          company_id: profile.company_id,
+          full_name: customerFullName,
+          phone: normalizedPhone,
+          city: customerCityOrAddress || null,
+        })
+        .select('id, full_name, phone')
+        .single()
+
+      if (customerError || !createdCustomer) {
+        return { error: 'Impossible de créer le client.' }
+      }
+      customerId = createdCustomer.id
+      newCustomerRow = createdCustomer
     }
-    customerId = createdCustomer.id
-    newCustomerRow = createdCustomer
   } else {
     const { data: existingCustomer, error: checkError } = await supabase
       .from('customers')
@@ -655,6 +680,8 @@ export async function confirmOrder(orderId: string) {
   revalidatePath('/dashboard/orders')
   revalidatePath('/commandes')
   revalidatePath('/dashboard/clients')
+  revalidatePath('/dashboard/customers')
+  revalidatePath('/dashboard/products')
   revalidatePath('/dashboard')
 
   return { success: true, parcelNumber: parcelToAssign }

@@ -13,7 +13,14 @@ const brandingSettingsSchema = z.object({
     .min(2, 'Le nom de la boutique doit contenir au moins 2 caractères.')
     .max(100, 'Le nom est trop long.'),
   logoUrl: z.string().trim().max(2_500_000, 'Le logo est trop volumineux.').nullable().optional(),
-  themePalette: z.enum(['indigo', 'emerald', 'terracotta']),
+  themePalette: z.enum([
+    'emerald',
+    'sky',
+    'coral',
+    'violet',
+    'indigo',
+    'terracotta',
+  ]),
 })
 
 export type BrandingSettingsInput = z.infer<typeof brandingSettingsSchema>
@@ -40,9 +47,35 @@ export async function updateBrandingSettings(rawData: BrandingSettingsInput) {
     return { error: 'Profil ou entreprise introuvable.' }
   }
 
-  if (profile.role !== 'owner') {
+  if (
+    profile.role !== 'owner' &&
+    profile.role !== 'seller' &&
+    profile.role !== 'admin' &&
+    profile.role !== 'super_admin'
+  ) {
     return { error: 'Seul le propriétaire de la boutique peut modifier la marque.' }
   }
+
+  const normalizedStorePalette = (
+    ['emerald', 'sky', 'coral', 'violet'].includes(parsed.data.themePalette)
+      ? parsed.data.themePalette
+      : 'emerald'
+  ) as 'emerald' | 'sky' | 'coral' | 'violet'
+
+  // Synchroniser public.stores si la table existe
+  await supabase
+    .from('stores')
+    .upsert(
+      {
+        owner_id: user.id,
+        company_id: profile.company_id,
+        store_name: parsed.data.name,
+        logo_url: parsed.data.logoUrl ?? null,
+        palette_key: normalizedStorePalette,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'owner_id' }
+    )
 
   const { error } = await supabase
     .from('companies')

@@ -896,8 +896,78 @@ function NewOrderModal({
               </span>
             </div>
           ) : (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-              <div className="flex items-center justify-between gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              {/* Canal d'acquisition rapide (TikTok / WhatsApp / Instagram) */}
+              <div>
+                <p className="text-xs font-bold text-slate-700 mb-1.5">
+                  Canal de commande :
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { id: 'whatsapp', label: '💬 WhatsApp' },
+                      { id: 'tiktok', label: '🎵 TikTok' },
+                      { id: 'instagram', label: '📸 Instagram' },
+                      { id: 'manual', label: '✍️ Manuel' },
+                    ] as const
+                  ).map((ch) => (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => {
+                        const tag = `[CANAL: ${ch.label}]`
+                        setNotes((prev) =>
+                          prev.includes('[CANAL:')
+                            ? prev.replace(/\[CANAL:[^\]]+\]/, tag)
+                            : prev
+                            ? `${tag} ${prev}`
+                            : tag
+                        )
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:border-primary text-slate-800 transition cursor-pointer"
+                    >
+                      {ch.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Zones de livraison Lomé (calcul auto du COD total) */}
+              <div>
+                <p className="text-xs font-bold text-slate-700 mb-1.5">
+                  Zone de livraison Lomé (tarif auto) :
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { name: 'Tokoin', fee: 1000 },
+                    { name: 'Déckon', fee: 1000 },
+                    { name: 'Agoè', fee: 1500 },
+                    { name: 'Adidogomé', fee: 1500 },
+                    { name: 'Baguida', fee: 2000 },
+                  ].map((z) => (
+                    <button
+                      key={z.name}
+                      type="button"
+                      onClick={() => {
+                        setDeliveryFee(String(z.fee))
+                        if (customerMode === 'new' && !newCustomer.city.trim()) {
+                          setNewCustomer((prev) => ({ ...prev, city: z.name }))
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                        Number(deliveryFee) === z.fee &&
+                        newCustomer.city.toLowerCase().includes(z.name.toLowerCase())
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white border-slate-200 hover:border-primary text-slate-800'
+                      }`}
+                    >
+                      {z.name} • {z.fee} F
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
                 <div>
                   <label className="block text-sm font-semibold text-slate-900">
                     3. Frais de livraison (FCFA)
@@ -2108,25 +2178,29 @@ export default function OrdersView({
                     <p className="text-xs text-slate-400">Livraison : {formatMoney(order.delivery_fee)}</p>
                     {(() => {
                       const match = (order.notes || '').match(/\[INFO MANQUANTE:\s*([^\]]+)\]/i)
-                      const missingInfo = match ? match[1].trim() : null
+                      const missingInfo = match
+                        ? match[1].trim()
+                        : order.status === 'pending_confirmation'
+                        ? 'Quartier ou confirmation taille/numéro'
+                        : null
                       if (!missingInfo) return null
                       return (
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2">
                           <span className="text-xs font-semibold text-amber-900">
-                            ⚠️ Incomplet : {missingInfo}
+                            ⚠️ Infos manquantes : {missingInfo}
                           </span>
                           {phoneDigits && (
                             <a
                               href={toWhatsAppUrl(
                                 order.customers?.phone || phoneDigits,
-                                `Bonjour ${order.customers?.full_name || 'Client(e)'}, votre commande chez ${companyName} est en attente car il nous manque : ${missingInfo}. Merci de nous le préciser.`
+                                `Bonjour ${order.customers?.full_name || 'Client(e)'}, votre commande chez ${companyName} est en attente car il nous manque : ${missingInfo}. Merci de nous préciser votre quartier / numéro pour l'envoi.`
                               )}
                               target="_blank"
                               rel="noreferrer"
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium inline-flex items-center gap-1 transition"
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold inline-flex items-center gap-1 transition"
                             >
                               <MessageCircle className="w-3 h-3" strokeWidth={1.75} />
-                              <span>Demander l&apos;info manquante</span>
+                              <span>Relancer sur WhatsApp</span>
                             </a>
                           )}
                         </div>

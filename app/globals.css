@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
-:root,
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-soft: #ecfdf5;
+  --primary-soft-text: #065f46;
+  --primary-border: #a7f3d0;
+  --primary-ring: #10b981;
+}
+
 [data-theme="indigo"] {
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -15,12 +25,45 @@
 [data-theme="emerald"] {
   --background: #f8fafc;
   --foreground: #0f172a;
-  --primary: hsl(158 64% 40%);
-  --primary-hover: hsl(158 64% 33%);
-  --primary-soft: hsl(152 76% 96%);
-  --primary-soft-text: hsl(158 64% 30%);
-  --primary-border: hsl(152 60% 80%);
-  --primary-ring: hsl(158 64% 40%);
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-soft: #ecfdf5;
+  --primary-soft-text: #065f46;
+  --primary-border: #a7f3d0;
+  --primary-ring: #10b981;
+}
+
+[data-theme="sky"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --primary-soft: #f0f9ff;
+  --primary-soft-text: #075985;
+  --primary-border: #bae6fd;
+  --primary-ring: #0284c7;
+}
+
+[data-theme="coral"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #f97316;
+  --primary-hover: #ea580c;
+  --primary-soft: #fff7ed;
+  --primary-soft-text: #9a3412;
+  --primary-border: #fed7aa;
+  --primary-ring: #f97316;
+}
+
+[data-theme="violet"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-soft: #f5f3ff;
+  --primary-soft-text: #5b21b6;
+  --primary-border: #ddd6fe;
+  --primary-ring: #7c3aed;
 }
 
 [data-theme="terracotta"] {
@@ -43,7 +86,7 @@
   --color-primary-soft-text: var(--primary-soft-text);
   --color-primary-border: var(--primary-border);
   --color-primary-ring: var(--primary-ring);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-inter), var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 

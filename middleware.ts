@@ -16,7 +16,11 @@ export async function middleware(request: NextRequest) {
     pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/signup') ||
     pathname.startsWith('/first-login') ||
+    pathname.startsWith('/track') ||
+    pathname.startsWith('/invite') ||
+    pathname.startsWith('/live') ||
     pathname.startsWith('/api')
   ) {
     return NextResponse.next()
@@ -59,6 +63,7 @@ export async function middleware(request: NextRequest) {
   const isAuthPage =
     pathname === '/login' ||
     pathname === '/register' ||
+    pathname === '/signup' ||
     pathname === '/forgot-password'
   const isPublicPage =
     isAuthPage ||
@@ -84,13 +89,30 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .maybeSingle()
 
-    const isCourier = profile?.role === 'courier'
-    const isSuperAdmin = profile?.role === 'super_admin'
+    const isCourier = profile?.role === 'courier' || profile?.role === 'driver'
+    const isEmployee = profile?.role === 'employee'
+    const isSuperAdmin =
+      profile?.role === 'super_admin' || profile?.role === 'admin'
 
-    if (pathname.startsWith('/super-admin') && !isSuperAdmin) {
+    if (
+      (pathname.startsWith('/super-admin') || pathname.startsWith('/admin')) &&
+      !isSuperAdmin
+    ) {
       return NextResponse.redirect(
         new URL('/dashboard?error=unauthorized', request.url)
       )
+    }
+
+    // Rôle employee : aucun accès aux finances, rapprochements ni réglages sensibles
+    if (
+      isEmployee &&
+      (pathname.startsWith('/dashboard/finances') ||
+        pathname.startsWith('/dashboard/payments') ||
+        pathname.startsWith('/paiements') ||
+        pathname.startsWith('/dashboard/settings') ||
+        pathname.startsWith('/dashboard/analytics'))
+    ) {
+      return NextResponse.redirect(new URL('/dashboard/orders', request.url))
     }
 
     if (isAuthPage) {

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { DailyCashSummaryModal } from '@/components/dashboard/DailyCashSummaryModal'
 
 export interface DashboardOrderItem {
   id: string
@@ -111,6 +112,7 @@ export default function OwnerDashboardView({
   settlements: DashboardSettlementItem[]
 }) {
   const [period, setPeriod] = useState<PeriodFilter>('today')
+  const [bilanModalOpen, setBilanModalOpen] = useState(false)
 
   const stats = useMemo(() => {
     const orderById = new Map<string, DashboardOrderItem>()
@@ -293,6 +295,15 @@ export default function OwnerDashboardView({
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setBilanModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition cursor-pointer"
+          >
+            <span>📊</span>
+            <span>Bilan de caisse du jour</span>
+          </button>
 
           <Link
             href="/dashboard/orders?new=1"
@@ -600,6 +611,21 @@ export default function OwnerDashboardView({
           )}
         </div>
       </div>
+
+      <DailyCashSummaryModal
+        isOpen={bilanModalOpen}
+        onClose={() => setBilanModalOpen(false)}
+        companyName={companyName}
+        totalSalesCount={stats.salesCount}
+        totalSalesRevenueFcfa={stats.salesRevenue}
+        directShopCollectedFcfa={Math.max(
+          0,
+          stats.salesRevenue - stats.totalCollectedByCouriers
+        )}
+        expectedFromCouriersFcfa={stats.expectedNet}
+        settledByCouriersFcfa={stats.totalSettled}
+        discrepancyFcfa={stats.totalSettled - stats.expectedNet}
+      />
     </div>
   )
 }

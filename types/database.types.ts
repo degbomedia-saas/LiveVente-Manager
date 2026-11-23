@@ -1,6 +1,59 @@
-export type UserRole = 'owner' | 'employee' | 'courier' | 'super_admin'
+export type UserRole =
+  | 'owner'
+  | 'employee'
+  | 'courier'
+  | 'super_admin'
+  | 'admin'
+  | 'seller'
+  | 'driver'
+  | 'customer'
 
-export type ThemePalette = 'indigo' | 'emerald' | 'terracotta'
+export type StorePaletteKey = 'emerald' | 'sky' | 'coral' | 'violet'
+
+export type ThemePalette =
+  | StorePaletteKey
+  | 'indigo'
+  | 'terracotta'
+
+export type StorePlan = 'free_mvp' | 'pro' | 'business'
+export type StorePlanStatus = 'active' | 'trial' | 'suspended'
+
+export interface StoreRow {
+  id: string
+  owner_id: string
+  company_id: string | null
+  store_name: string
+  whatsapp_phone: string | null
+  city: string
+  logo_url: string | null
+  palette_key: StorePaletteKey
+  plan: StorePlan
+  plan_status: StorePlanStatus
+  loyalty_threshold: number
+  created_at: string
+  updated_at: string
+}
+
+export interface DeliveryZoneRow {
+  id: string
+  seller_id: string
+  zone_name: string
+  fee_fcfa: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SubscriptionRequestRow {
+  id: string
+  seller_id: string
+  requested_plan: StorePlan
+  mobile_money_ref: string
+  phone: string
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+  updated_at: string
+}
 
 export type SubscriptionPlanType = 'trial' | 'starter' | 'pro' | 'enterprise'
 

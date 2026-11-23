@@ -23,7 +23,10 @@ function parseTagList(raw?: string): string[] {
 export async function createProduct(rawData: ProductInput) {
   const supabase = await createClient()
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: 'Non authentifié. Veuillez vous reconnecter.' }
   }
@@ -39,11 +42,45 @@ export async function createProduct(rawData: ProductInput) {
     return { error: 'Profil introuvable.' }
   }
 
-  if (profile.role !== 'owner' && profile.role !== 'employee') {
-    return { error: 'Action non autorisée.' }
+  const { data: storeRow } = await supabase
+    .from('stores')
+    .select('id')
+    .eq('owner_id', user.id)
+    .maybeSingle()
+
+  const fullPayload = {
+    company_id: profile.company_id,
+    seller_id: storeRow?.id ?? null,
+    name: parsed.data.name,
+    base_price: parsed.data.basePrice,
+    price_fcfa: Math.round(parsed.data.basePrice),
+    sku: parsed.data.sku || null,
+    category: parsed.data.category || 'Mode',
+    stock_qty: parsed.data.stockQty ?? 10,
+    low_stock_threshold: parsed.data.lowStockThreshold ?? 3,
+    image_url: parsed.data.imageUrl || null,
+    available_sizes: parseTagList(parsed.data.sizesInput),
+    available_colors: parseTagList(parsed.data.colorsInput),
   }
 
   const { data: product, error: insertError } = await supabase
+    .from('products')
+    .insert(fullPayload)
+    .select(
+      'id, name, base_price, price_fcfa, sku, category, stock_qty, low_stock_threshold, image_url, available_sizes, available_colors, is_active, created_at'
+    )
+    .maybeSingle()
+
+  if (!insertError && product) {
+    revalidatePath('/produits')
+    revalidatePath('/dashboard/products')
+    revalidatePath('/commandes')
+    revalidatePath('/dashboard/orders')
+    return { success: true as const, product }
+  }
+
+  // Repli si la migration 019 n'est pas encore appliquée en base
+  const { data: baseProduct, error: baseError } = await supabase
     .from('products')
     .insert({
       company_id: profile.company_id,
@@ -52,13 +89,14 @@ export async function createProduct(rawData: ProductInput) {
       available_sizes: parseTagList(parsed.data.sizesInput),
       available_colors: parseTagList(parsed.data.colorsInput),
     })
-    .select('id, name, base_price, available_sizes, available_colors, is_active, created_at')
+    .select(
+      'id, name, base_price, available_sizes, available_colors, is_active, created_at'
+    )
     .single()
 
-  if (insertError || !product) {
+  if (baseError || !baseProduct) {
     return {
-      error:
-        'Erreur lors de l\'enregistrement. Vérifiez que supabase/migrations/006_products_catalog.sql est exécuté dans Supabase.',
+      error: "Erreur lors de l'enregistrement du produit.",
     }
   }
 
@@ -66,13 +104,27 @@ export async function createProduct(rawData: ProductInput) {
   revalidatePath('/dashboard/products')
   revalidatePath('/commandes')
   revalidatePath('/dashboard/orders')
-  return { success: true as const, product }
+  return {
+    success: true as const,
+    product: {
+      ...baseProduct,
+      price_fcfa: Math.round(parsed.data.basePrice),
+      sku: parsed.data.sku || null,
+      category: parsed.data.category || 'Mode',
+      stock_qty: parsed.data.stockQty ?? 10,
+      low_stock_threshold: parsed.data.lowStockThreshold ?? 3,
+      image_url: parsed.data.imageUrl || null,
+    },
+  }
 }
 
 export async function updateProduct(rawData: UpdateProductInput) {
   const supabase = await createClient()
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: 'Non authentifié.' }
   }
@@ -88,11 +140,37 @@ export async function updateProduct(rawData: UpdateProductInput) {
     return { error: 'Profil introuvable.' }
   }
 
-  if (profile.role !== 'owner' && profile.role !== 'employee') {
-    return { error: 'Action non autorisée.' }
+  const { data: product, error: updateError } = await supabase
+    .from('products')
+    .update({
+      name: parsed.data.name,
+      base_price: parsed.data.basePrice,
+      price_fcfa: Math.round(parsed.data.basePrice),
+      sku: parsed.data.sku || null,
+      category: parsed.data.category || 'Mode',
+      stock_qty: parsed.data.stockQty ?? 10,
+      low_stock_threshold: parsed.data.lowStockThreshold ?? 3,
+      image_url: parsed.data.imageUrl || null,
+      available_sizes: parseTagList(parsed.data.sizesInput),
+      available_colors: parseTagList(parsed.data.colorsInput),
+    })
+    .eq('id', parsed.data.id)
+    .eq('company_id', profile.company_id)
+    .select(
+      'id, name, base_price, price_fcfa, sku, category, stock_qty, low_stock_threshold, image_url, available_sizes, available_colors, is_active, created_at'
+    )
+    .maybeSingle()
+
+  if (!updateError && product) {
+    revalidatePath('/produits')
+    revalidatePath('/dashboard/products')
+    revalidatePath('/commandes')
+    revalidatePath('/dashboard/orders')
+    return { success: true as const, product }
   }
 
-  const { data: product, error: updateError } = await supabase
+  // Repli sans les colonnes 019
+  const { data: baseProduct, error: baseErr } = await supabase
     .from('products')
     .update({
       name: parsed.data.name,
@@ -102,10 +180,12 @@ export async function updateProduct(rawData: UpdateProductInput) {
     })
     .eq('id', parsed.data.id)
     .eq('company_id', profile.company_id)
-    .select('id, name, base_price, available_sizes, available_colors, is_active, created_at')
+    .select(
+      'id, name, base_price, available_sizes, available_colors, is_active, created_at'
+    )
     .single()
 
-  if (updateError || !product) {
+  if (baseErr || !baseProduct) {
     return { error: 'Impossible de modifier ce produit.' }
   }
 
@@ -113,13 +193,27 @@ export async function updateProduct(rawData: UpdateProductInput) {
   revalidatePath('/dashboard/products')
   revalidatePath('/commandes')
   revalidatePath('/dashboard/orders')
-  return { success: true as const, product }
+  return {
+    success: true as const,
+    product: {
+      ...baseProduct,
+      price_fcfa: Math.round(parsed.data.basePrice),
+      sku: parsed.data.sku || null,
+      category: parsed.data.category || 'Mode',
+      stock_qty: parsed.data.stockQty ?? 10,
+      low_stock_threshold: parsed.data.lowStockThreshold ?? 3,
+      image_url: parsed.data.imageUrl || null,
+    },
+  }
 }
 
 export async function toggleProductActive(productId: string, isActive: boolean) {
   const supabase = await createClient()
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: 'Non authentifié.' }
   }
@@ -127,10 +221,6 @@ export async function toggleProductActive(productId: string, isActive: boolean) 
   const profile = await getOrCreateProfile(supabase, user)
   if (profile.profileMissing || !profile.company_id) {
     return { error: 'Profil introuvable.' }
-  }
-
-  if (profile.role !== 'owner' && profile.role !== 'employee') {
-    return { error: 'Action non autorisée.' }
   }
 
   const { error } = await supabase
@@ -148,4 +238,32 @@ export async function toggleProductActive(productId: string, isActive: boolean) 
   revalidatePath('/commandes')
   revalidatePath('/dashboard/orders')
   return { success: true }
+}
+
+export async function toggleProductShowInLive(
+  productId: string,
+  showInLive: boolean
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Non authentifié.' }
+  }
+
+  const profile = await getOrCreateProfile(supabase, user)
+  if (!profile.company_id) {
+    return { error: 'Profil introuvable.' }
+  }
+
+  await supabase
+    .from('products')
+    .update({ show_in_live: showInLive })
+    .eq('id', productId)
+    .eq('company_id', profile.company_id)
+
+  revalidatePath('/dashboard/products')
+  return { success: true as const }
 }

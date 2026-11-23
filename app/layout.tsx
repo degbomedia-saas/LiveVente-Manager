@@ -1,21 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateProfile, type ThemePalette } from "@/lib/supabase/ensure-profile";
+import { BrandConfigProvider } from "@/lib/config/brand";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 async function getActiveBranding(): Promise<{
   storeName: string;
+  logoUrl: string | null;
   themePalette: ThemePalette;
 }> {
   try {
@@ -25,39 +16,59 @@ async function getActiveBranding(): Promise<{
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return { storeName: "kaba kaba — Plateforme de ventes & livraisons express", themePalette: "indigo" };
+      return {
+        storeName: "Kaba Kaba",
+        logoUrl: null,
+        themePalette: "emerald",
+      };
     }
 
     const profile = await getOrCreateProfile(supabase, user);
-    const storeName = profile.companies?.name?.trim() || "kaba kaba — Plateforme de ventes & livraisons express";
+    const storeName = profile.companies?.name?.trim() || "Kaba Kaba";
+    const logoUrl = profile.companies?.logo_url ?? null;
     const rawPalette = profile.companies?.theme_palette;
     const themePalette: ThemePalette =
-      rawPalette === "emerald" || rawPalette === "terracotta" ? rawPalette : "indigo";
+      rawPalette === "emerald" ||
+      rawPalette === "sky" ||
+      rawPalette === "coral" ||
+      rawPalette === "violet" ||
+      rawPalette === "indigo" ||
+      rawPalette === "terracotta"
+        ? rawPalette
+        : "emerald";
 
-    return { storeName, themePalette };
+    return { storeName, logoUrl, themePalette };
   } catch {
-    return { storeName: "kaba kaba — Plateforme de ventes & livraisons express", themePalette: "indigo" };
+    return {
+      storeName: "Kaba Kaba",
+      logoUrl: null,
+      themePalette: "emerald",
+    };
   }
 }
 
 export async function generateMetadata(): Promise<Metadata> {
   const { storeName } = await getActiveBranding();
   return {
-    title: storeName,
-    description: `Gestion des ventes et livraisons — ${storeName}`,
+    title: `${storeName} — Commandes & Livraisons TikTok, WhatsApp, Instagram`,
+    description: `Suivi de colis, étiquettes QR et caisse T-Money / Flooz / Espèces — ${storeName}`,
   };
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const { themePalette } = await getActiveBranding();
+  const { themePalette, logoUrl } = await getActiveBranding();
 
   return (
     <html
       lang="fr"
       data-theme={themePalette}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-[#F8FAFC] text-[#0F172A]">
+        <BrandConfigProvider initialConfig={{ name: "Kaba Kaba", logoUrl }}>
+          {children}
+        </BrandConfigProvider>
+      </body>
     </html>
   );
 }

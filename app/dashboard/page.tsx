@@ -27,7 +27,20 @@ export default async function DashboardPage({
 
   const profile = await getOrCreateProfile(supabase, user)
 
-  if (profile.role === 'courier') redirect('/mes-livraisons')
+  if (profile.role === 'courier' || profile.role === 'driver') redirect('/mes-livraisons')
+
+  // Si le vendeur n'a pas encore configuré sa boutique dans public.stores, rediriger vers /onboarding
+  if (profile.role === 'seller' || profile.role === 'owner') {
+    const { data: storeRow, error: storeErr } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('owner_id', user.id)
+      .maybeSingle()
+
+    if (!storeErr && !storeRow) {
+      redirect('/onboarding')
+    }
+  }
 
   const companyName = profile.companies?.name ?? 'Votre entreprise'
   const userName = profile.full_name

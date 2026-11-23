@@ -14,11 +14,16 @@ export default async function SettingsPage() {
 
   const profile = await getOrCreateProfile(supabase, user)
 
-  if (profile.role === 'courier') {
+  if (profile.role === 'courier' || profile.role === 'driver') {
     redirect('/mes-livraisons')
   }
 
-  if (profile.role !== 'owner') {
+  if (
+    profile.role !== 'owner' &&
+    profile.role !== 'seller' &&
+    profile.role !== 'admin' &&
+    profile.role !== 'super_admin'
+  ) {
     redirect('/dashboard')
   }
 

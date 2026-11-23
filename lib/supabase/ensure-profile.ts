@@ -1,6 +1,12 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 
-export type ThemePalette = 'indigo' | 'emerald' | 'terracotta'
+export type ThemePalette =
+  | 'emerald'
+  | 'sky'
+  | 'coral'
+  | 'violet'
+  | 'indigo'
+  | 'terracotta'
 
 export interface UserProfile {
   full_name: string

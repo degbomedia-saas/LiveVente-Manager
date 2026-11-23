@@ -226,6 +226,18 @@ export async function assignDelivery(rawData: AssignDeliveryInput) {
     return { error: 'Impossible d\'affecter une commande déjà livrée ou annulée.' }
   }
 
+  if (
+    order.status !== 'confirmed' &&
+    order.status !== 'packed' &&
+    order.status !== 'assigned' &&
+    order.status !== 'shipped'
+  ) {
+    return {
+      error:
+        'Verrouillage livraison : la commande doit être confirmée avant d’attribuer un livreur.',
+    }
+  }
+
   const { data: courier, error: courierError } = await supabase
     .from('profiles')
     .select('id, full_name, phone, is_active')

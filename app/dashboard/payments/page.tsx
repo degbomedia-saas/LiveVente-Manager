@@ -31,8 +31,12 @@ export default async function PaymentsPage() {
 
   const profile = await getOrCreateProfile(supabase, user)
 
-  if (profile.role === 'courier') {
+  if (profile.role === 'courier' || profile.role === 'driver') {
     redirect('/mes-livraisons')
+  }
+
+  if (profile.role === 'employee') {
+    redirect('/dashboard/orders')
   }
 
   const [

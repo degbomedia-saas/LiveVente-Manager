@@ -26,6 +26,7 @@ import type { SubscriptionStatus, SubscriptionSummary } from '@/types/database.t
 import { SubscriptionBadge } from '@/components/dashboard/SubscriptionBadge'
 import { TrialAlertBanner } from '@/components/dashboard/TrialAlertBanner'
 import { UpgradeModal } from '@/components/dashboard/UpgradeModal'
+import { VoiceDictationFab } from '@/components/dashboard/VoiceDictationFab'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -53,9 +54,11 @@ function TopNavContent({
   subscription?: SubscriptionSummary | null
   onOpenUpgrade?: () => void
 }) {
-  const isCourier = userRole === 'courier'
-  const isSuperAdmin = userRole === 'super_admin'
-  const isOwner = userRole === 'owner' || isSuperAdmin
+  const isCourier = userRole === 'courier' || userRole === 'driver'
+  const isEmployee = userRole === 'employee'
+  const isSuperAdmin = userRole === 'super_admin' || userRole === 'admin'
+  const isOwner =
+    userRole === 'owner' || userRole === 'seller' || isSuperAdmin
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -163,7 +166,18 @@ function TopNavContent({
                   { href: '/dashboard', label: 'Accueil', active: isStep1Active, Icon: LayoutDashboard, title: "Vue d'ensemble et métriques de la journée" },
                   { href: '/dashboard/orders', label: 'Commandes', active: isStep2Active, Icon: ShoppingCart, title: 'Prise et validation des commandes live' },
                   { href: '/dashboard/packing', label: 'Colisage', active: isStep3Active, Icon: PackageCheck, title: 'Numérotation séquentielle et remise aux livreurs' },
-                  { href: '/dashboard/payments', label: 'Caisse', active: isStep4Active, Icon: Wallet, title: 'Contrôle caisse, encaissements et écarts de livraison' },
+                  ...(!isEmployee
+                    ? [
+                        {
+                          href: '/dashboard/payments',
+                          label: 'Caisse',
+                          active: isStep4Active,
+                          Icon: Wallet,
+                          title:
+                            'Contrôle caisse, encaissements et écarts de livraison',
+                        },
+                      ]
+                    : []),
                 ].map((item) => (
                   <Link
                     key={item.href}
@@ -274,20 +288,22 @@ function TopNavContent({
                       </div>
                     </Link>
 
-                    <Link
-                      href="/dashboard/analytics"
-                      className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-violet-50/60 transition ${
-                        pathname.startsWith('/dashboard/analytics') ? 'bg-violet-50 text-violet-900 font-bold' : 'text-gray-700'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-violet-100/70 text-violet-700 flex items-center justify-center shrink-0">
-                        <BarChart3 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-xs text-gray-900 leading-tight">Rapports &amp; Analytics</p>
-                        <p className="text-[11px] text-gray-500">CA, quartiers &amp; export CSV</p>
-                      </div>
-                    </Link>
+                    {!isEmployee && (
+                      <Link
+                        href="/dashboard/analytics"
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-violet-50/60 transition ${
+                          pathname.startsWith('/dashboard/analytics') ? 'bg-violet-50 text-violet-900 font-bold' : 'text-gray-700'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-violet-100/70 text-violet-700 flex items-center justify-center shrink-0">
+                          <BarChart3 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-xs text-gray-900 leading-tight">Rapports &amp; Analytics</p>
+                          <p className="text-[11px] text-gray-500">CA, quartiers &amp; export CSV</p>
+                        </div>
+                      </Link>
+                    )}
 
                     {isOwner && (
                       <>
@@ -369,71 +385,102 @@ function TopNavContent({
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/80 shadow-lg z-30">
         <div className="flex items-center justify-around py-1.5 px-2">
           {isCourier ? (
-            <Link
-              href="/mes-livraisons"
-              className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition ${
-                pathname === '/mes-livraisons' ? 'text-blue-800 font-bold' : 'text-gray-500'
-              }`}
-            >
-              <Truck className="w-5 h-5" />
-              <span className="text-[10px]">Livraisons</span>
-            </Link>
+            <>
+              <Link
+                href="/driver"
+                className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition ${
+                  pathname === '/driver'
+                    ? 'text-primary font-bold'
+                    : 'text-gray-500'
+                }`}
+              >
+                <Bike className="w-4 h-4" />
+                <span className="text-[10px]">Mes courses</span>
+              </Link>
+              <Link
+                href="/mes-livraisons"
+                className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition ${
+                  pathname === '/mes-livraisons'
+                    ? 'text-primary font-bold'
+                    : 'text-gray-500'
+                }`}
+              >
+                <PackageCheck className="w-4 h-4" />
+                <span className="text-[10px]">Historique</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-gray-500"
+              >
+                <Users className="w-4 h-4" />
+                <span className="text-[10px]">Profil</span>
+              </button>
+            </>
           ) : (
             <>
               {/* 1. Accueil */}
               <Link
                 href="/dashboard"
                 className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition ${
-                  isStep1Active ? 'text-blue-700 font-bold' : 'text-gray-500'
+                  isStep1Active ? 'text-primary font-bold' : 'text-gray-500'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4" />
-                <span className="text-[10px]">1. Accueil</span>
+                <span className="text-[10px]">Accueil</span>
               </Link>
 
               {/* 2. Commandes */}
               <Link
                 href="/dashboard/orders"
                 className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition ${
-                  isStep2Active ? 'text-blue-700 font-bold' : 'text-gray-500'
+                  isStep2Active ? 'text-primary font-bold' : 'text-gray-500'
                 }`}
               >
                 <ShoppingCart className="w-4 h-4" />
-                <span className="text-[10px]">2. Ventes</span>
+                <span className="text-[10px]">Commandes</span>
               </Link>
 
-              {/* 3. Colisage */}
+              {/* 3. Stock/Scan */}
               <Link
-                href="/dashboard/packing"
+                href="/dashboard/products"
                 className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition ${
-                  isStep3Active ? 'text-amber-700 font-bold' : 'text-gray-500'
+                  pathname.startsWith('/dashboard/products') ||
+                  pathname.startsWith('/dashboard/packing')
+                    ? 'text-primary font-bold'
+                    : 'text-gray-500'
                 }`}
               >
-                <PackageCheck className="w-4 h-4" />
-                <span className="text-[10px]">3. Colisage</span>
+                <Tag className="w-4 h-4" />
+                <span className="text-[10px]">Stock/Scan</span>
               </Link>
 
-              {/* 4. Rapprochement */}
+              {/* 4. Livreurs */}
               <Link
-                href="/dashboard/payments"
+                href="/dashboard/drivers"
                 className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition ${
-                  isStep4Active ? 'text-emerald-700 font-bold' : 'text-gray-500'
+                  pathname.startsWith('/dashboard/drivers') ||
+                  pathname.startsWith('/dashboard/couriers')
+                    ? 'text-primary font-bold'
+                    : 'text-gray-500'
                 }`}
               >
-                <Wallet className="w-4 h-4" />
-                <span className="text-[10px]">4. Caisse</span>
+                <Bike className="w-4 h-4" />
+                <span className="text-[10px]">Livreurs</span>
               </Link>
 
-              {/* Plus / Gestion */}
+              {/* 5. Menu */}
               <button
                 type="button"
                 onClick={() => setMobileMoreOpen(!mobileMoreOpen)}
                 className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition ${
-                  isGestionActive || mobileMoreOpen ? 'text-gray-900 font-bold' : 'text-gray-400'
+                  isGestionActive || mobileMoreOpen
+                    ? 'text-gray-900 font-bold'
+                    : 'text-gray-500'
                 }`}
               >
                 <Layers className="w-4 h-4" />
-                <span className="text-[10px]">Gestion</span>
+                <span className="text-[10px]">Menu</span>
               </button>
             </>
           )}
@@ -467,13 +514,15 @@ function TopNavContent({
                 <Bike className="w-4 h-4 text-teal-700 mb-1" />
                 <span className="text-[11px] font-semibold">Livreurs</span>
               </Link>
-              <Link
-                href="/dashboard/analytics"
-                className="flex flex-col items-center justify-center p-2 rounded-xl bg-violet-50/70 border border-violet-100 text-violet-900 text-center"
-              >
-                <BarChart3 className="w-4 h-4 text-violet-700 mb-1" />
-                <span className="text-[11px] font-semibold">Rapports</span>
-              </Link>
+              {!isEmployee && (
+                <Link
+                  href="/dashboard/finances"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl bg-violet-50/70 border border-violet-100 text-violet-900 text-center"
+                >
+                  <Wallet className="w-4 h-4 text-violet-700 mb-1" />
+                  <span className="text-[11px] font-semibold">Finances</span>
+                </Link>
+              )}
             </div>
             {isOwner && (
               <Link
@@ -515,8 +564,13 @@ export default function DashboardLayout({
   logoUrl,
   themePalette,
 }: DashboardLayoutProps) {
+  const pathname = usePathname()
   const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const showVoiceFab =
+    userRole !== 'courier' &&
+    userRole !== 'driver' &&
+    (pathname === '/dashboard' || pathname.startsWith('/dashboard/orders'))
 
   useEffect(() => {
     if (userRole === 'courier') return
@@ -593,6 +647,8 @@ export default function DashboardLayout({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
         {children}
       </main>
+
+      {showVoiceFab && <VoiceDictationFab />}
 
       <UpgradeModal
         isOpen={upgradeOpen}
