@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { Mic, Plus, Wallet } from 'lucide-react'
 import { DailyCashSummaryModal } from '@/components/dashboard/DailyCashSummaryModal'
 import { getLomeDateKey, isInPeriodLome } from '@/lib/utils/lome-time'
 
@@ -326,7 +327,7 @@ export default function OwnerDashboardView({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="inline-flex bg-gray-100 p-1 rounded-xl border border-gray-200/70">
             {(
               [
@@ -339,7 +340,7 @@ export default function OwnerDashboardView({
                 key={opt.id}
                 type="button"
                 onClick={() => setPeriod(opt.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
                   period === opt.id
                     ? 'bg-white text-[#1E40AF] shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
@@ -353,17 +354,25 @@ export default function OwnerDashboardView({
           <button
             type="button"
             onClick={() => setBilanModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition cursor-pointer"
+            className="min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm active:scale-[0.98] transition cursor-pointer"
           >
-            <span>📊</span>
-            <span>Bilan de caisse du jour</span>
+            <Wallet className="w-4 h-4" />
+            <span>Bilan de caisse</span>
           </button>
 
           <Link
-            href="/dashboard/orders?new=1"
-            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1E40AF] hover:bg-blue-900 text-white text-sm font-semibold shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
+            href="/dashboard/orders/new"
+            className="min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white text-sm font-semibold shadow-sm active:scale-[0.98] transition"
           >
-            <span className="transition-transform duration-200 group-hover:rotate-90">➕</span>
+            <Mic className="w-4 h-4 text-[#10B981]" />
+            <span>Commande Express IA</span>
+          </Link>
+
+          <Link
+            href="/dashboard/orders?new=1"
+            className="group min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1E40AF] hover:bg-blue-900 text-white text-sm font-semibold shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200"
+          >
+            <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
             <span>Nouvelle commande</span>
           </Link>
         </div>

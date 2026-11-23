@@ -35,7 +35,7 @@ export default async function NewExpressOrderPage() {
       <div className="max-w-2xl mx-auto space-y-4">
         <Link
           href="/dashboard/orders"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#64748B] hover:text-[#0F172A]"
+          className="min-h-[44px] inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-[#0F172A] hover:bg-slate-50 transition"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Retour aux commandes</span>

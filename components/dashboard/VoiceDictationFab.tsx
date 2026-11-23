@@ -211,7 +211,7 @@ export function VoiceDictationFab({
       setPaymentMethod(parsed.payment_method)
       setItems(parsed.items)
     } catch {
-      setError('Erreur réseau lors de l’analyse Groq.')
+      setError('Connexion instable. Vérifiez votre réseau 3G/4G et réessayez.')
     } finally {
       setIsAnalyzing(false)
     }
@@ -315,34 +315,41 @@ export function VoiceDictationFab({
         )}
       </div>
 
-      {/* Deux onglets rapides : Dicter (Audio) 🎙️ | Coller un message WhatsApp 📋 */}
+      {/* Deux onglets rapides : Dicter (Audio) | Coller WhatsApp */}
       <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0]">
         <button
           type="button"
           onClick={() => setModeTab('audio')}
-          className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+          className={`min-h-[48px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
             modeTab === 'audio'
               ? 'bg-[#10B981] text-white shadow-2xs'
               : 'text-[#64748B] hover:text-[#0F172A]'
           }`}
         >
           <Mic className="w-4 h-4" />
-          <span>Dicter (Audio) 🎙️</span>
+          <span>Dicter (Audio)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setModeTab('whatsapp')}
-          className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+          className={`min-h-[48px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
             modeTab === 'whatsapp'
               ? 'bg-[#10B981] text-white shadow-2xs'
               : 'text-[#64748B] hover:text-[#0F172A]'
           }`}
         >
           <ClipboardPaste className="w-4 h-4" />
-          <span>Coller WhatsApp 📋</span>
+          <span>Coller WhatsApp</span>
         </button>
       </div>
+
+      {toast && (
+        <div className="rounded-2xl bg-[#ECFDF5] border border-[#A7F3D0] px-4 py-3 text-xs sm:text-sm font-bold text-[#065F46] flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
+          <span>{toast}</span>
+        </div>
+      )}
 
       {/* Bandeau d'upgrade Mobile Money dès qu'un quota gratuit est atteint */}
       {quotaReachedMsg && (
@@ -381,16 +388,16 @@ export function VoiceDictationFab({
             <button
               type="button"
               onClick={stopRecording}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-extrabold shrink-0 cursor-pointer"
+              className="min-h-[48px] inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-rose-600 text-white text-xs sm:text-sm font-extrabold shrink-0 cursor-pointer active:scale-[0.98]"
             >
-              <Square className="w-3.5 h-3.5 fill-white" />
+              <Square className="w-4 h-4 fill-white" />
               <span>Stop</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={startRecording}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#10B981] text-white text-xs font-extrabold shrink-0 cursor-pointer"
+              className="min-h-[48px] inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white text-xs sm:text-sm font-extrabold shrink-0 cursor-pointer active:scale-[0.98]"
             >
               <Mic className="w-4 h-4" />
               <span>Parler</span>
@@ -404,15 +411,15 @@ export function VoiceDictationFab({
             value={whatsappRawText}
             onChange={(e) => setWhatsappRawText(e.target.value)}
             placeholder="Collez ici le message WhatsApp de la cliente (ex: Bonjour c'est Afiwa au 90 12 34 56, je prends 2 robes wax, livraison à Agoè pharmacie...)"
-            className="w-full px-3 py-2 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-xs sm:text-sm text-[#0F172A] focus:outline-none focus:border-[#10B981]"
+            className="w-full px-3 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm text-[#0F172A] focus:outline-none focus:border-[#10B981]"
           />
           <button
             type="button"
             disabled={isAnalyzing || !whatsappRawText.trim()}
             onClick={() => sendToGroq({ rawText: whatsappRawText })}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-[#0F172A] hover:bg-[#1E293B] text-white disabled:opacity-50 transition cursor-pointer"
+            className="min-h-[48px] w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold bg-[#0F172A] hover:bg-[#1E293B] text-white disabled:opacity-50 transition cursor-pointer active:scale-[0.98]"
           >
-            ✨ Extraire la commande avec Groq IA
+            Remplir automatiquement avec l&apos;IA
           </button>
         </div>
       )}
@@ -438,10 +445,9 @@ export function VoiceDictationFab({
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">
-                  Drapeau automatique : is_missing_info = true
+                  À compléter avant départ en livraison :
                 </p>
-                <p>
-                  Champs manquants :{' '}
+                <p className="mt-0.5">
                   <strong>{liveMissingFields.join(', ')}</strong>
                 </p>
               </div>
@@ -478,6 +484,42 @@ export function VoiceDictationFab({
                 placeholder="+228 90 00 00 00"
                 className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
               />
+            </div>
+          </div>
+
+          {/* Choix rapide Zone Lomé en 1 clic */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold text-[#0F172A]">
+              Zone rapide Lomé (remplit quartier + frais) :
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { name: 'Tokoin', fee: 1000 },
+                { name: 'Déckon', fee: 1000 },
+                { name: 'Agoè', fee: 1500 },
+                { name: 'Adidogomé', fee: 1500 },
+                { name: 'Baguida', fee: 2000 },
+              ].map((z) => {
+                const selected =
+                  zoneName.trim().toLowerCase() === z.name.toLowerCase()
+                return (
+                  <button
+                    key={z.name}
+                    type="button"
+                    onClick={() => {
+                      setZoneName(z.name)
+                      setDeliveryFee(z.fee)
+                    }}
+                    className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      selected
+                        ? 'bg-[#0F172A] text-white border-[#0F172A]'
+                        : 'bg-[#F8FAFC] text-[#0F172A] border-[#E2E8F0] hover:border-[#10B981]'
+                    }`}
+                  >
+                    {z.name} • {z.fee} F
+                  </button>
+                )
+              })}
             </div>
           </div>
 

@@ -74,6 +74,7 @@ export function DriverMobileView({
     'collected'
   )
   const [modalError, setModalError] = useState<string | null>(null)
+  const [driverToast, setDriverToast] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -131,7 +132,7 @@ export function DriverMobileView({
 
     if (outcome === 'delivered' && !recipientName.trim()) {
       setModalError(
-        'Le nom du réceptionnaire est obligatoire pour valider une livraison réussie.'
+        'Indiquez le nom de la personne qui a reçu le colis.'
       )
       return
     }
@@ -177,6 +178,11 @@ export function DriverMobileView({
               : c
           )
         )
+        setDriverToast(
+          outcome === 'delivered'
+            ? `Livraison ${activeCourse.orderNumber} confirmée !`
+            : `Tentative enregistrée pour ${activeCourse.orderNumber}.`
+        )
         setActiveCourse(null)
         setPhotoUrl(null)
         setRecipientName('')
@@ -204,6 +210,21 @@ export function DriverMobileView({
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-4">
+        {driverToast && (
+          <div className="rounded-2xl bg-[#ECFDF5] border border-[#A7F3D0] px-4 py-3 text-xs sm:text-sm font-bold text-[#065F46] flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
+              <span>{driverToast}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setDriverToast(null)}
+              className="text-xs font-extrabold text-[#065F46] px-2 py-1"
+            >
+              OK
+            </button>
+          </div>
+        )}
         {tab === 'profile' ? (
           <div className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -285,12 +306,12 @@ export function DriverMobileView({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <a
                     href={`tel:${course.customerPhone}`}
-                    className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A]"
+                    className="min-h-[48px] inline-flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] active:scale-[0.98] transition"
                   >
-                    <Phone className="w-3.5 h-3.5 text-[#0284C7]" />
+                    <Phone className="w-4 h-4 text-[#0284C7]" />
                     <span>Appeler</span>
                   </a>
 
@@ -299,30 +320,47 @@ export function DriverMobileView({
                       href={waUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46]"
+                      className="min-h-[48px] inline-flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46] active:scale-[0.98] transition"
                     >
-                      <MessageCircle className="w-3.5 h-3.5" />
+                      <MessageCircle className="w-4 h-4" />
                       <span>WhatsApp</span>
                     </a>
                   )}
                 </div>
 
                 {course.status !== 'delivered' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveCourse(course)
-                      setOutcome('delivered')
-                      setRecipientName(course.customerName)
-                      setCodCollected(String(course.totalCodFcfa))
-                      setCodStatus('collected')
-                      setModalError(null)
-                    }}
-                    className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-[#10B981] hover:bg-[#059669] text-white inline-flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Valider Livraison ou Tentative</span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveCourse(course)
+                        setOutcome('delivered')
+                        setRecipientName(course.customerName)
+                        setCodCollected(String(course.totalCodFcfa))
+                        setCodStatus('collected')
+                        setModalError(null)
+                      }}
+                      className="min-h-[48px] py-3 px-3 rounded-xl text-xs sm:text-sm font-extrabold bg-[#10B981] hover:bg-[#059669] text-white inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] transition"
+                    >
+                      <Camera className="w-4 h-4 shrink-0" />
+                      <span>Livré</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveCourse(course)
+                        setOutcome('failed')
+                        setRecipientName(course.customerName)
+                        setCodCollected(String(course.totalCodFcfa))
+                        setModalError(null)
+                      }}
+                      className="min-h-[48px] py-3 px-3 rounded-xl text-xs sm:text-sm font-extrabold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] transition"
+                    >
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Échec / Report</span>
+                    </button>
+                  </div>
                 )}
               </div>
             )
@@ -486,7 +524,7 @@ export function DriverMobileView({
               <button
                 type="button"
                 onClick={() => setActiveCourse(null)}
-                className="flex-1 py-3 rounded-xl text-xs font-bold bg-[#F8FAFC] border border-[#E2E8F0] text-[#64748B]"
+                className="min-h-[48px] flex-1 py-3 rounded-xl text-xs sm:text-sm font-bold bg-[#F8FAFC] border border-[#E2E8F0] text-[#64748B] cursor-pointer"
               >
                 Annuler
               </button>
@@ -494,7 +532,7 @@ export function DriverMobileView({
                 type="button"
                 disabled={isPending || isSubmitting || uploading}
                 onClick={handleValidateAttempt}
-                className={`flex-1 py-3 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`min-h-[48px] flex-1 py-3 rounded-xl text-xs sm:text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   outcome === 'delivered' ? 'bg-[#10B981]' : 'bg-rose-600'
                 }`}
               >
