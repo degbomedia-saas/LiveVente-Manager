@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { completeSellerOnboarding } from '@/app/actions/onboarding'
-import { DEFAULT_LOME_ZONES } from '@/lib/config/lome-zones'
+import { DEFAULT_LOME_ZONES, LOME_QUARTIERS } from '@/lib/config/lome-zones'
 import {
   compressImageForUpload,
   compressImageToDataUrl,
@@ -260,11 +260,17 @@ export function OnboardingForm({
                   <input
                     type="text"
                     required
+                    list="lome-quartiers-onboarding"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="Lomé — Tokoin / Déckon"
                     className="w-full pl-10 pr-3.5 py-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A] focus:bg-[#FFFFFF] focus:outline-none focus:border-[#10B981]"
                   />
+                  <datalist id="lome-quartiers-onboarding">
+                    {LOME_QUARTIERS.map((q) => (
+                      <option key={q} value={q} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
             </div>

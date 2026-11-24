@@ -1,3 +1,28 @@
+export const LOME_QUARTIERS = [
+  'Tokoin',
+  'Déckon',
+  'Agoè',
+  'Adidogomé',
+  'Baguida',
+  'Bè',
+  'Hedzranawoé',
+  'Kégué',
+  'Totsi',
+  'Agbalépédogan',
+  'Avédji',
+  'Cacaveli',
+  'Ségbé',
+  'Zanguéra',
+  'Akodésséwa',
+  'Nyékonakpoè',
+  'Kodjoviakopé',
+  'Amoutivé',
+  'Gbossimé',
+  'Hanoukopé',
+  'Vakpossito',
+  'Aflao Gakli',
+] as const
+
 export const DEFAULT_LOME_ZONES: Array<{
   zone_name: string
   fee_fcfa: number

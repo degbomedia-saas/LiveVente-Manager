@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -12,12 +12,25 @@ export default function RegisterPage() {
   const router = useRouter()
   const [fullName, setFullName]       = useState('')
   const [companyName, setCompanyName] = useState('')
+  const [phone, setPhone]             = useState('')
+  const [zone, setZone]               = useState('')
   const [email, setEmail]             = useState('')
   const [password, setPassword]       = useState('')
   const [errors, setErrors]           = useState<Record<string, string>>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [loading, setLoading]         = useState(false)
   const [step, setStep]               = useState<'form' | 'check-email'>('form')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const pPhone = params.get('phone')
+    const pShop = params.get('shop')
+    const pZone = params.get('zone')
+    if (pPhone) setPhone(pPhone)
+    if (pShop) setCompanyName(pShop)
+    if (pZone) setZone(pZone)
+  }, [])
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
@@ -47,6 +60,8 @@ export default function RegisterPage() {
         data: {
           full_name:    result.data.fullName,
           company_name: result.data.companyName,
+          ...(phone.trim() ? { phone: phone.trim() } : {}),
+          ...(zone.trim() ? { zone: zone.trim() } : {}),
         },
       },
     })
@@ -166,6 +181,37 @@ export default function RegisterPage() {
             />
             {errors.companyName && <p className="text-red-600 text-xs mt-1">{errors.companyName}</p>}
           </div>
+
+          {(phone || zone) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div>
+                <label htmlFor="phone" className="block text-xs font-semibold text-gray-600 mb-1">
+                  WhatsApp (+228)
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="+228 90 12 34 56"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="zone" className="block text-xs font-semibold text-gray-600 mb-1">
+                  Quartier / Zone
+                </label>
+                <input
+                  id="zone"
+                  type="text"
+                  value={zone}
+                  onChange={e => setZone(e.target.value)}
+                  placeholder="Tokoin, Agoè..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Email */}
           <div>

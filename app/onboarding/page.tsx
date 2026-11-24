@@ -45,7 +45,11 @@ export default async function OnboardingPage() {
         (user.user_metadata?.phone as string) ||
         '+228 '
       }
-      initialCity={existingStore?.city || 'Lomé — Déckon'}
+      initialCity={
+        existingStore?.city ||
+        (user.user_metadata?.zone as string) ||
+        'Lomé — Déckon'
+      }
     />
   )
 }
