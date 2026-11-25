@@ -578,7 +578,10 @@ export async function updatePlatformSettings(input: {
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+  const isFounder =
+    (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
+
+  if (!isFounder && profile?.role !== 'super_admin' && profile?.role !== 'admin') {
     return { error: 'Accès réservé aux administrateurs.' }
   }
 
@@ -686,7 +689,10 @@ export async function recordAdminSystemLog(input: {
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+  const isFounder =
+    (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
+
+  if (!isFounder && profile?.role !== 'super_admin' && profile?.role !== 'admin') {
     return { error: 'Non autorisé.' }
   }
 
@@ -754,7 +760,10 @@ export async function clearAdminSystemLogs() {
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+  const isFounder =
+    (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
+
+  if (!isFounder && profile?.role !== 'super_admin' && profile?.role !== 'admin') {
     return { error: 'Non autorisé.' }
   }
 

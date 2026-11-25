@@ -23,7 +23,14 @@ export default async function SuperAdminLayout({
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.role !== 'super_admin') {
+  const isFounder =
+    (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
+
+  if (
+    !isFounder &&
+    profile?.role !== 'super_admin' &&
+    profile?.role !== 'admin'
+  ) {
     redirect('/dashboard?error=unauthorized')
   }
 

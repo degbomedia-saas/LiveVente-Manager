@@ -9,6 +9,8 @@ import { formatAuthError } from '@/lib/auth-errors'
 import { activateCourierAccount } from '@/app/actions/couriers'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
 
+const FOUNDER_EMAIL = 'degbomedia@gmail.com'
+
 function normalizeIdentifierToEmail(rawInput: string): {
   resolvedEmail: string
   isPhone: boolean
@@ -52,6 +54,7 @@ export default function LoginPage() {
   const [serverError, setServerError] = useState<string | null>(null)
   const [rawSupabaseError, setRawSupabaseError] = useState<string | null>(null)
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
+  const [showResetButton, setShowResetButton] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendMessage, setResendMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -63,6 +66,7 @@ export default function LoginPage() {
     setServerError(null)
     setRawSupabaseError(null)
     setEmailNotConfirmed(false)
+    setShowResetButton(false)
     setResendMessage(null)
 
     try {
@@ -88,15 +92,79 @@ export default function LoginPage() {
       }
 
       const { resolvedEmail, isPhone } = normalizeIdentifierToEmail(cleanId)
+      const isFounder = resolvedEmail === FOUNDER_EMAIL
 
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
+      let { data, error } = await supabase.auth.signInWithPassword({
         email: resolvedEmail,
         password,
       })
 
+      // Si le compte fondateur Super Admin (degbomedia@gmail.com) avait été supprimé de auth.users,
+      // tenter de le recréer automatiquement avec le mot de passe saisi
+      if (
+        error &&
+        isFounder &&
+        error.message === 'Invalid login credentials' &&
+        password.length >= 6
+      ) {
+        const { data: signUpData, error: signUpErr } =
+          await supabase.auth.signUp({
+            email: FOUNDER_EMAIL,
+            password,
+            options: {
+              data: {
+                full_name: 'Super Admin Kaba Kaba',
+                company_name: 'Kaba Kaba Lomé',
+              },
+            },
+          })
+
+        if (!signUpErr && signUpData?.user) {
+          if (signUpData.session) {
+            data = {
+              user: signUpData.user,
+              session: signUpData.session,
+            }
+            error = null
+          } else {
+            const retrySignIn = await supabase.auth.signInWithPassword({
+              email: FOUNDER_EMAIL,
+              password,
+            })
+            if (!retrySignIn.error && retrySignIn.data?.user) {
+              data = retrySignIn.data
+              error = null
+            }
+          }
+
+          if (!error && data?.user) {
+            await supabase.rpc('create_company_and_profile', {
+              p_full_name: 'Super Admin Kaba Kaba',
+              p_company_name: 'Kaba Kaba Lomé',
+            })
+          }
+        } else if (
+          signUpErr &&
+          signUpErr.message.toLowerCase().includes('already registered')
+        ) {
+          setShowResetButton(true)
+          setServerError(
+            'Le compte Super Admin degbomedia@gmail.com existe déjà dans Supabase, mais avec un mot de passe différent de celui saisi.'
+          )
+          setRawSupabaseError(
+            `Compte existant vérifié (signUp -> "${signUpErr.message}"). Cliquez sur "Recevoir un lien pour réinitialiser mon mot de passe" ci-dessous ou mettez à jour le mot de passe dans Supabase > Authentication > Users.`
+          )
+          setLoading(false)
+          return
+        }
+      }
+
       if (error) {
         setEmailNotConfirmed(error.message === 'Email not confirmed')
+        if (error.message === 'Invalid login credentials' && !isPhone) {
+          setShowResetButton(true)
+        }
         const formatted = formatAuthError(error.message)
         setServerError(
           isPhone && error.message === 'Invalid login credentials'
@@ -110,7 +178,7 @@ export default function LoginPage() {
         return
       }
 
-      let destination = '/dashboard'
+      let destination = isFounder ? '/admin' : '/dashboard'
       if (data.user) {
         try {
           await activateCourierAccount({
@@ -119,20 +187,28 @@ export default function LoginPage() {
             email: data.user.email || null,
           })
 
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', data.user.id)
-            .maybeSingle()
-
-          if (profile?.role === 'super_admin' || profile?.role === 'admin') {
+          if (isFounder) {
+            await supabase
+              .from('profiles')
+              .update({ role: 'super_admin' })
+              .eq('id', data.user.id)
             destination = '/admin'
-          } else if (
-            profile?.role === 'courier' ||
-            profile?.role === 'driver' ||
-            data.user.user_metadata?.role === 'courier'
-          ) {
-            destination = '/mes-livraisons'
+          } else {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.user.id)
+              .maybeSingle()
+
+            if (profile?.role === 'super_admin' || profile?.role === 'admin') {
+              destination = '/admin'
+            } else if (
+              profile?.role === 'courier' ||
+              profile?.role === 'driver' ||
+              data.user.user_metadata?.role === 'courier'
+            ) {
+              destination = '/mes-livraisons'
+            }
           }
         } catch (profileErr) {
           console.warn('Erreur vérification profil rôle:', profileErr)
@@ -159,6 +235,32 @@ export default function LoginPage() {
       setRawSupabaseError(`Exception client : ${msg}`)
       setLoading(false)
     }
+  }
+
+  async function handleSendPasswordReset() {
+    setResending(true)
+    setResendMessage(null)
+
+    const { resolvedEmail } = normalizeIdentifierToEmail(identifier)
+    if (!resolvedEmail || !resolvedEmail.includes('@')) {
+      setServerError('Saisissez votre adresse email pour réinitialiser le mot de passe.')
+      setResending(false)
+      return
+    }
+
+    const supabase = createClient()
+    const { error } = await supabase.auth.resetPasswordForEmail(resolvedEmail, {
+      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
+    })
+
+    if (error) {
+      setRawSupabaseError(`Supabase ResetPassword : "${error.message}"`)
+    } else {
+      setResendMessage(
+        `Un lien de réinitialisation de mot de passe a été envoyé à ${resolvedEmail}. Vérifiez votre boîte mail (et vos spams).`
+      )
+    }
+    setResending(false)
   }
 
   async function handleResendConfirmation() {
@@ -301,12 +403,24 @@ export default function LoginPage() {
                   {rawSupabaseError}
                 </p>
               )}
+              {showResetButton && (
+                <button
+                  type="button"
+                  disabled={resending}
+                  onClick={handleSendPasswordReset}
+                  className="text-xs font-bold text-blue-800 underline hover:opacity-80 disabled:opacity-50 block mt-1 cursor-pointer"
+                >
+                  {resending
+                    ? 'Envoi en cours...'
+                    : '📧 Recevoir un lien pour réinitialiser mon mot de passe'}
+                </button>
+              )}
               {emailNotConfirmed && (
                 <button
                   type="button"
                   disabled={resending}
                   onClick={handleResendConfirmation}
-                  className="text-xs font-bold text-blue-800 underline hover:opacity-80 disabled:opacity-50 block mt-1"
+                  className="text-xs font-bold text-blue-800 underline hover:opacity-80 disabled:opacity-50 block mt-1 cursor-pointer"
                 >
                   {resending
                     ? 'Envoi en cours...'

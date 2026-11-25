@@ -40,12 +40,26 @@ async function selectProfile(supabase: SupabaseClient, userId: string): Promise<
   return basic ?? null
 }
 
+export const FOUNDER_SUPER_ADMIN_EMAIL = 'degbomedia@gmail.com'
+
+export function isFounderSuperAdminEmail(email?: string | null): boolean {
+  return (email || '').trim().toLowerCase() === FOUNDER_SUPER_ADMIN_EMAIL
+}
+
 export async function getOrCreateProfile(
   supabase: SupabaseClient,
   user: User
 ): Promise<UserProfile> {
+  const isFounder = isFounderSuperAdminEmail(user.email)
   const existing = await selectProfile(supabase, user.id)
   if (existing) {
+    if (isFounder && existing.role !== 'super_admin') {
+      await supabase
+        .from('profiles')
+        .update({ role: 'super_admin' })
+        .eq('id', user.id)
+      return { ...existing, role: 'super_admin' }
+    }
     return existing
   }
 
@@ -64,12 +78,19 @@ export async function getOrCreateProfile(
 
   const created = await selectProfile(supabase, user.id)
   if (created) {
+    if (isFounder && created.role !== 'super_admin') {
+      await supabase
+        .from('profiles')
+        .update({ role: 'super_admin' })
+        .eq('id', user.id)
+      return { ...created, role: 'super_admin' }
+    }
     return created
   }
 
   return {
     full_name: fallbackName,
-    role: 'owner',
+    role: isFounder ? 'super_admin' : 'owner',
     company_id: '',
     companies: { name: fallbackCompany, logo_url: null, theme_palette: 'indigo' },
     profileMissing: true,

@@ -131,8 +131,12 @@ export async function middleware(request: NextRequest) {
 
     const isCourier = profile?.role === 'courier' || profile?.role === 'driver'
     const isEmployee = profile?.role === 'employee'
+    const isFounder =
+      (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
     const isSuperAdmin =
-      profile?.role === 'super_admin' || profile?.role === 'admin'
+      isFounder ||
+      profile?.role === 'super_admin' ||
+      profile?.role === 'admin'
 
     if (
       (pathname.startsWith('/super-admin') || pathname.startsWith('/admin')) &&

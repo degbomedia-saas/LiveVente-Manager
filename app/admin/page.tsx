@@ -39,8 +39,22 @@ export default async function AdminPage({
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.role !== 'super_admin' && profile?.role !== 'admin') {
+  const isFounder =
+    (user.email || '').trim().toLowerCase() === 'degbomedia@gmail.com'
+
+  if (
+    !isFounder &&
+    profile?.role !== 'super_admin' &&
+    profile?.role !== 'admin'
+  ) {
     redirect('/dashboard?error=unauthorized')
+  }
+
+  if (isFounder && profile && profile.role !== 'super_admin') {
+    await supabase
+      .from('profiles')
+      .update({ role: 'super_admin' })
+      .eq('id', user.id)
   }
 
   const [
