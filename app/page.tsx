@@ -3,9 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { LandingClient } from './_components/LandingClient'
 
 export const metadata: Metadata = {
-  title: 'Kaba Kaba — La logistique nouvelle génération à Lomé',
+  title: 'Kaba Kaba — Divisez par 3 votre temps de gestion des commandes à Lomé',
   description:
-    'Centralisez vos commandes WhatsApp, pilotez vos livreurs moto et maîtrisez votre caisse T-Money / Moov en temps réel.',
+    'Arrêtez de jongler entre cahiers papier, WhatsApp et appels de livreurs. Utilisez la Dictée vocale, imprimez vos Étiquettes QR et suivez T-Money, Flooz et Cash sur un seul écran.',
 }
 
 export default async function HomePage() {

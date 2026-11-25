@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { registerSchema } from '@/lib/validations/auth'
 import { formatAuthError } from '@/lib/auth-errors'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
+import { LOME_QUARTIERS } from '@/lib/config/lome-zones'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -182,36 +183,41 @@ export default function RegisterPage() {
             {errors.companyName && <p className="text-red-600 text-xs mt-1">{errors.companyName}</p>}
           </div>
 
-          {(phone || zone) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
-              <div>
-                <label htmlFor="phone" className="block text-xs font-semibold text-gray-600 mb-1">
-                  WhatsApp (+228)
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+228 90 12 34 56"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="zone" className="block text-xs font-semibold text-gray-600 mb-1">
-                  Quartier / Zone
-                </label>
-                <input
-                  id="zone"
-                  type="text"
-                  value={zone}
-                  onChange={e => setZone(e.target.value)}
-                  placeholder="Tokoin, Agoè..."
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          {/* WhatsApp & Quartier de Lomé (saisie libre + datalist) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
+            <div>
+              <label htmlFor="phone" className="block text-xs font-semibold text-gray-700 mb-1">
+                WhatsApp (+228)
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+228 90 12 34 56"
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-          )}
+            <div>
+              <label htmlFor="zone" className="block text-xs font-semibold text-gray-700 mb-1">
+                Quartier / Zone (Lomé ou libre)
+              </label>
+              <input
+                id="zone"
+                type="text"
+                list="lome-quartiers-signup"
+                value={zone}
+                onChange={e => setZone(e.target.value)}
+                placeholder="Tokoin, Agoè, Déckon..."
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <datalist id="lome-quartiers-signup">
+                {LOME_QUARTIERS.map(q => (
+                  <option key={q} value={q} />
+                ))}
+              </datalist>
+            </div>
+          </div>
 
           {/* Email */}
           <div>
