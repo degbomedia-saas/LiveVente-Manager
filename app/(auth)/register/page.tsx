@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatAuthError } from '@/lib/auth-errors'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
@@ -54,6 +55,7 @@ export default function RegisterPage() {
   const [zone, setZone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [rawSupabaseError, setRawSupabaseError] = useState<string | null>(null)
@@ -165,7 +167,17 @@ export default function RegisterPage() {
         }
       )
 
-      if (rpcError) {
+      const rpcResult = rpcData as {
+        success?: boolean
+        company_id?: string
+        error?: string
+      } | null
+
+      const alreadyExists =
+        (rpcError?.message || '').includes('existe déjà') ||
+        (rpcResult?.error || '').includes('existe déjà')
+
+      if (rpcError && !alreadyExists) {
         setServerError(formatAuthError(rpcError.message))
         setRawSupabaseError(
           `Supabase RPC create_company_and_profile : "${rpcError.message}"`
@@ -174,13 +186,7 @@ export default function RegisterPage() {
         return
       }
 
-      const rpcResult = rpcData as {
-        success?: boolean
-        company_id?: string
-        error?: string
-      } | null
-
-      if (rpcResult && rpcResult.success === false) {
+      if (rpcResult && rpcResult.success === false && !alreadyExists) {
         setServerError(
           "Votre compte a été créé mais l'entreprise n'a pas pu être initialisée."
         )
@@ -416,19 +422,37 @@ export default function RegisterPage() {
                 (6 caractères minimum)
               </span>
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition ${
-                errors.password
-                  ? 'border-red-400 bg-red-50'
-                  : 'border-gray-200'
-              }`}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className={`w-full px-4 py-3 pr-11 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition ${
+                  errors.password
+                    ? 'border-red-400 bg-red-50'
+                    : 'border-gray-200'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={
+                  showPassword
+                    ? 'Masquer le mot de passe'
+                    : 'Afficher le mot de passe'
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+            </div>
             {errors.password && (
               <p className="text-red-600 text-xs mt-1">{errors.password}</p>
             )}
