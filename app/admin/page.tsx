@@ -207,7 +207,7 @@ export default async function AdminPage({
                 {platformRes.data?.saas_name || 'Kaba Kaba'} — Super Admin (/admin)
               </p>
               <p className="text-xs text-[#94A3B8]">
-                {profile.full_name || user.email}
+                {profile?.full_name || user.email}
               </p>
             </div>
           </div>

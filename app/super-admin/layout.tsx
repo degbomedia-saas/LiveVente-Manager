@@ -52,7 +52,7 @@ export default async function SuperAdminLayout({
                 </span>
               </div>
               <p className="text-xs text-[#94A3B8] truncate">
-                {profile.full_name || user.email}
+                {profile?.full_name || user.email}
               </p>
             </div>
           </div>
