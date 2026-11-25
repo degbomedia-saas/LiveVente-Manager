@@ -182,6 +182,22 @@ export function LandingClient({ saasName, saasLogoUrl }: LandingClientProps) {
   const t = TRANSLATIONS[lang]
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash || ''
+    const search = window.location.search || ''
+    if (
+      hash.includes('type=recovery') ||
+      hash.includes('access_token=') ||
+      hash.includes('error_description=') ||
+      search.includes('type=recovery') ||
+      search.includes('token_hash=') ||
+      search.includes('code=')
+    ) {
+      window.location.replace(`/reset-password${search}${hash}`)
+    }
+  }, [])
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setLiveIdx((prev) => (prev + 1) % 3)
       setAnimKey((prev) => prev + 1)
