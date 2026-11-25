@@ -2,8 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Mic, Plus, Wallet } from 'lucide-react'
+import { Download, Mic, Plus, Wallet } from 'lucide-react'
 import { DailyCashSummaryModal } from '@/components/dashboard/DailyCashSummaryModal'
+import {
+  FreeOrdersGaugeBanner,
+  InAppPaywallModal,
+  type PaywallContextProps,
+} from '@/components/dashboard/InAppPaywallModal'
 import { getLomeDateKey, isInPeriodLome } from '@/lib/utils/lome-time'
 
 export interface DashboardOrderItem {
@@ -88,6 +93,7 @@ export default function OwnerDashboardView({
   deliveries,
   payments,
   settlements,
+  paywall,
 }: {
   userName: string
   companyName: string
@@ -95,9 +101,64 @@ export default function OwnerDashboardView({
   deliveries: DashboardDeliveryItem[]
   payments: DashboardPaymentItem[]
   settlements: DashboardSettlementItem[]
+  paywall?: PaywallContextProps
 }) {
   const [period, setPeriod] = useState<PeriodFilter>('today')
   const [bilanModalOpen, setBilanModalOpen] = useState(false)
+
+  const resolvedPaywall: PaywallContextProps = paywall ?? {
+    plan: 'free_mvp',
+    storeId: null,
+    storeName: companyName,
+    ordersUsed: orders.filter((o) => o.status !== 'cancelled').length,
+    freeOrdersLimit: 20,
+    tmoneyPhone: '+228 90 12 34 56',
+    floozPhone: '+228 96 12 34 56',
+  }
+
+  const isFreeLimitReached =
+    resolvedPaywall.plan === 'free_mvp' &&
+    resolvedPaywall.ordersUsed >= (resolvedPaywall.freeOrdersLimit || 20)
+
+  const [paywallOpen, setPaywallOpen] = useState<boolean>(isFreeLimitReached)
+  const [paywallReason, setPaywallReason] = useState<
+    'quota' | 'bilan' | 'csv' | 'manual'
+  >(isFreeLimitReached ? 'quota' : 'manual')
+
+  function handleBilanClick() {
+    if (resolvedPaywall.plan === 'free_mvp') {
+      setPaywallReason('bilan')
+      setPaywallOpen(true)
+      return
+    }
+    setBilanModalOpen(true)
+  }
+
+  function handleExportCsvClick() {
+    if (resolvedPaywall.plan === 'free_mvp') {
+      setPaywallReason('csv')
+      setPaywallOpen(true)
+      return
+    }
+    const headers = ['ID', 'Statut', 'Montant_FCFA', 'Frais_Livraison_FCFA', 'Date']
+    const rows = orders.map((o) => [
+      o.id,
+      o.status,
+      String(o.total_amount ?? 0),
+      String(o.delivery_fee ?? 0),
+      o.ordered_at,
+    ])
+    const csvContent = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `kaba-kaba-commandes-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const stats = useMemo(() => {
     const orderById = new Map<string, DashboardOrderItem>()
@@ -241,6 +302,15 @@ export default function OwnerDashboardView({
 
   return (
     <div className="space-y-6">
+      {/* Jauge discrète X / 20 commandes gratuites */}
+      <FreeOrdersGaugeBanner
+        paywall={resolvedPaywall}
+        onOpenPaywall={() => {
+          setPaywallReason(isFreeLimitReached ? 'quota' : 'manual')
+          setPaywallOpen(true)
+        }}
+      />
+
       {/* Checklist démarrage 3 étapes (si 0 commande) */}
       {orders.length === 0 && (
         <section className="rounded-2xl bg-gradient-to-br from-[#ECFDF5] via-white to-[#F0F9FF] border border-[#A7F3D0] p-5 sm:p-6 shadow-sm space-y-4">
@@ -353,15 +423,31 @@ export default function OwnerDashboardView({
 
           <button
             type="button"
-            onClick={() => setBilanModalOpen(true)}
+            onClick={handleBilanClick}
             className="min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm active:scale-[0.98] transition cursor-pointer"
           >
             <Wallet className="w-4 h-4" />
             <span>Bilan de caisse</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleExportCsvClick}
+            className="min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-sm font-semibold shadow-2xs active:scale-[0.98] transition cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-slate-600" />
+            <span>Exporter CSV</span>
+          </button>
+
           <Link
             href="/dashboard/orders/new"
+            onClick={(e) => {
+              if (isFreeLimitReached) {
+                e.preventDefault()
+                setPaywallReason('quota')
+                setPaywallOpen(true)
+              }
+            }}
             className="min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white text-sm font-semibold shadow-sm active:scale-[0.98] transition"
           >
             <Mic className="w-4 h-4 text-[#10B981]" />
@@ -370,6 +456,13 @@ export default function OwnerDashboardView({
 
           <Link
             href="/dashboard/orders?new=1"
+            onClick={(e) => {
+              if (isFreeLimitReached) {
+                e.preventDefault()
+                setPaywallReason('quota')
+                setPaywallOpen(true)
+              }
+            }}
             className="group min-h-[48px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1E40AF] hover:bg-blue-900 text-white text-sm font-semibold shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200"
           >
             <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
@@ -688,6 +781,13 @@ export default function OwnerDashboardView({
         expectedFromCouriersFcfa={stats.expectedNet}
         settledByCouriersFcfa={stats.totalSettled}
         discrepancyFcfa={stats.totalSettled - stats.expectedNet}
+      />
+
+      <InAppPaywallModal
+        isOpen={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        paywall={resolvedPaywall}
+        triggerReason={paywallReason}
       />
     </div>
   )

@@ -22,6 +22,7 @@ export default async function OrdersPage({
     customers,
     couriers,
     products,
+    paywall,
   } = await getOrdersViewData(requestedPage, 20)
 
   // Si l'utilisateur arrive avec tab=packing, on passe en mode packing
@@ -50,6 +51,7 @@ export default async function OrdersPage({
         totalOrdersCount={totalOrdersCount}
         pageSize={pageSize}
         currentTabParam={params.tab}
+        paywall={paywall}
       />
     </DashboardLayout>
   )

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
+import { getSellerPaywallInfo } from '@/lib/quotas'
 import type {
   OrderCourierOption,
   OrderCustomerOption,
@@ -108,7 +109,12 @@ export async function getOrdersViewData(page = 1, pageSize = 20) {
     }
   }
 
-  const [{ data: customers }, { data: couriers }, { data: products }] = await Promise.all([
+  const [
+    { data: customers },
+    { data: couriers },
+    { data: products },
+    paywall,
+  ] = await Promise.all([
     supabase
       .from('customers')
       .select('id, full_name, phone, city')
@@ -124,6 +130,12 @@ export async function getOrdersViewData(page = 1, pageSize = 20) {
       .select('id, name, base_price, available_sizes, available_colors')
       .neq('is_active', false)
       .order('name', { ascending: true }),
+    getSellerPaywallInfo(
+      supabase,
+      user.id,
+      profile.company_id,
+      profile.companies?.name ?? 'Ma Boutique'
+    ),
   ])
 
   // Normalisation de parcel_number : s'il est présent dans ord.parcel_number ou repli dans ord.notes
@@ -150,5 +162,6 @@ export async function getOrdersViewData(page = 1, pageSize = 20) {
     customers: (customers ?? []) as OrderCustomerOption[],
     couriers: (couriers ?? []) as OrderCourierOption[],
     products: (products ?? []) as OrderProductOption[],
+    paywall,
   }
 }

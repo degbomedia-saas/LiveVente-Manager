@@ -5,7 +5,11 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
 import { assertStoreNotSuspended } from '@/lib/supabase/store-status'
-import { checkDriverQuota } from '@/lib/quotas'
+import {
+  checkDriverQuota,
+  DEFAULT_PLAN_QUOTAS,
+  encodeMaintenanceWithMerchants,
+} from '@/lib/quotas'
 
 function generateHexToken(): string {
   const bytes = new Uint8Array(12)
@@ -541,6 +545,8 @@ const platformSettingsSchema = z.object({
   proMaxDrivers: z.number().int().min(1).max(10000).optional(),
   isMaintenanceMode: z.boolean().optional(),
   maintenanceMessage: z.string().trim().max(1000).nullable().optional(),
+  merchantTmoneyPhone: z.string().trim().max(60).optional(),
+  merchantFloozPhone: z.string().trim().max(60).optional(),
 })
 
 export async function updatePlatformSettings(input: {
@@ -552,6 +558,8 @@ export async function updatePlatformSettings(input: {
   proMaxDrivers?: number
   isMaintenanceMode?: boolean
   maintenanceMessage?: string | null
+  merchantTmoneyPhone?: string
+  merchantFloozPhone?: string
 }) {
   const parsed = platformSettingsSchema.safeParse(input)
   if (!parsed.success) {
@@ -581,37 +589,59 @@ export async function updatePlatformSettings(input: {
     .maybeSingle()
 
   const data = parsed.data
-  const payload: Record<string, unknown> = {
+  const tmoneyPhone =
+    data.merchantTmoneyPhone?.trim() ||
+    DEFAULT_PLAN_QUOTAS.merchant_tmoney_phone
+  const floozPhone =
+    data.merchantFloozPhone?.trim() || DEFAULT_PLAN_QUOTAS.merchant_flooz_phone
+
+  const encodedMaintenance = encodeMaintenanceWithMerchants(
+    data.maintenanceMessage,
+    tmoneyPhone,
+    floozPhone
+  )
+
+  const basePayload: Record<string, unknown> = {
     saas_name: data.saasName,
     saas_logo_url: data.saasLogoUrl || null,
-    free_mvp_max_orders_month: data.freeMvpMaxOrdersMonth ?? 30,
+    free_mvp_max_orders_month: data.freeMvpMaxOrdersMonth ?? 20,
     free_mvp_max_drivers: data.freeMvpMaxDrivers ?? 1,
     free_mvp_max_ai_trials: data.freeMvpMaxAiTrials ?? 3,
     pro_max_drivers: data.proMaxDrivers ?? 3,
+    maintenance_message: encodedMaintenance,
     updated_at: new Date().toISOString(),
   }
 
   if (typeof data.isMaintenanceMode === 'boolean') {
-    payload.is_maintenance_mode = data.isMaintenanceMode
+    basePayload.is_maintenance_mode = data.isMaintenanceMode
   }
-  if (data.maintenanceMessage !== undefined) {
-    payload.maintenance_message = data.maintenanceMessage || null
+
+  const fullPayload: Record<string, unknown> = {
+    ...basePayload,
+    merchant_tmoney_phone: tmoneyPhone,
+    merchant_flooz_phone: floozPhone,
   }
 
   if (existing?.id) {
     const { error } = await supabase
       .from('platform_settings')
-      .update(payload)
+      .update(fullPayload)
       .eq('id', existing.id)
     if (error) {
-      await supabase
+      const { error: baseErr } = await supabase
         .from('platform_settings')
-        .update({
-          saas_name: data.saasName,
-          saas_logo_url: data.saasLogoUrl || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(basePayload)
         .eq('id', existing.id)
+      if (baseErr) {
+        await supabase
+          .from('platform_settings')
+          .update({
+            saas_name: data.saasName,
+            saas_logo_url: data.saasLogoUrl || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id)
+      }
     }
   } else {
     await supabase.from('platform_settings').insert({
@@ -621,6 +651,8 @@ export async function updatePlatformSettings(input: {
   }
 
   revalidatePath('/admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/orders')
   revalidatePath('/maintenance')
   revalidatePath('/')
   return { success: true as const }
@@ -758,7 +790,7 @@ export async function handleSubscriptionRequest(input: {
   if (error) return { error: error.message }
 
   if (input.decision === 'approved' && input.sellerId) {
-    await supabase
+    const { data: updatedStore } = await supabase
       .from('stores')
       .update({
         plan: input.requestedPlan,
@@ -766,9 +798,148 @@ export async function handleSubscriptionRequest(input: {
         updated_at: new Date().toISOString(),
       })
       .eq('id', input.sellerId)
+      .select('company_id')
+      .maybeSingle()
+
+    if (updatedStore?.company_id) {
+      const now = new Date()
+      const newEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+      await supabase
+        .from('subscriptions')
+        .update({
+          status: 'active',
+          plan_type: input.requestedPlan === 'business' ? 'enterprise' : 'pro',
+          current_period_starts_at: now.toISOString(),
+          current_period_ends_at: newEnd.toISOString(),
+        })
+        .eq('company_id', updatedStore.company_id)
+    }
   }
 
   revalidatePath('/admin')
   revalidatePath('/super-admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/orders')
   return { success: true as const }
+}
+
+const paywallSubscriptionRequestSchema = z.object({
+  billingCycle: z.enum(['monthly', 'quarterly']).default('monthly'),
+  mobileMoneyRef: z
+    .string()
+    .trim()
+    .min(3, 'Veuillez saisir la référence de votre transfert T-Money ou Flooz.')
+    .max(120, 'La référence est trop longue.'),
+  phone: z.string().trim().max(40).optional(),
+})
+
+export async function submitPaywallSubscriptionRequest(input: {
+  billingCycle?: 'monthly' | 'quarterly'
+  mobileMoneyRef: string
+  phone?: string
+}) {
+  const parsed = paywallSubscriptionRequestSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ??
+        'Veuillez vérifier la référence Mobile Money saisie.',
+    }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Non authentifié. Veuillez vous reconnecter.' }
+  }
+
+  const profile = await getOrCreateProfile(supabase, user)
+
+  let storeQuery = supabase
+    .from('stores')
+    .select('id, store_name, whatsapp_phone')
+    .limit(1)
+
+  if (profile.company_id) {
+    storeQuery = storeQuery.or(
+      `owner_id.eq.${user.id},company_id.eq.${profile.company_id}`
+    )
+  } else {
+    storeQuery = storeQuery.eq('owner_id', user.id)
+  }
+
+  const { data: existingStore } = await storeQuery.maybeSingle()
+
+  const metaPhone =
+    typeof user.user_metadata?.phone === 'string'
+      ? user.user_metadata.phone
+      : null
+  let storeId = existingStore?.id ?? null
+  let storePhone = existingStore?.whatsapp_phone || metaPhone || '+228'
+
+  if (!storeId) {
+    const { data: createdStore, error: createStoreErr } = await supabase
+      .from('stores')
+      .upsert(
+        {
+          owner_id: user.id,
+          company_id: profile.company_id ?? null,
+          store_name: profile.companies?.name || 'Ma Boutique Lomé',
+          whatsapp_phone: parsed.data.phone || metaPhone || null,
+          city: 'Lomé',
+          palette_key: 'emerald',
+          plan: 'free_mvp',
+          plan_status: 'trial',
+        },
+        { onConflict: 'owner_id' }
+      )
+      .select('id, whatsapp_phone')
+      .maybeSingle()
+
+    if (createStoreErr || !createdStore?.id) {
+      return {
+        error:
+          'Impossible de récupérer votre boutique pour enregistrer la demande.',
+      }
+    }
+    storeId = createdStore.id
+    storePhone = createdStore.whatsapp_phone || storePhone
+  }
+
+  const cyclePrefix =
+    parsed.data.billingCycle === 'quarterly'
+      ? '[15 000 FCFA / 3 mois] '
+      : '[5 000 FCFA / mois] '
+
+  const formattedRef = `${cyclePrefix}${parsed.data.mobileMoneyRef.trim()}`
+  const finalPhone = parsed.data.phone?.trim() || storePhone || '+228'
+
+  const { error: insertErr } = await supabase
+    .from('subscription_requests')
+    .insert({
+      seller_id: storeId,
+      requested_plan: 'pro',
+      mobile_money_ref: formattedRef,
+      phone: finalPhone,
+      status: 'pending',
+    })
+
+  if (insertErr) {
+    return {
+      error:
+        'Impossible d’enregistrer la référence Mobile Money. Réessayez ou envoyez votre preuve sur WhatsApp.',
+    }
+  }
+
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/orders')
+  return {
+    success: true as const,
+    reference: formattedRef,
+    storeId,
+  }
 }

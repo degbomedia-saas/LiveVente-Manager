@@ -1,9 +1,14 @@
 'use client'
 
-import { Phone, MessageCircle, Package as PackageIcon, Bike as BikeIcon, Camera as CameraIcon, User as UserIcon, X, MapPin } from 'lucide-react'
+import { Download, Phone, MessageCircle, Package as PackageIcon, Bike as BikeIcon, Camera as CameraIcon, User as UserIcon, X, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import {
+  FreeOrdersGaugeBanner,
+  InAppPaywallModal,
+  type PaywallContextProps,
+} from '@/components/dashboard/InAppPaywallModal'
 import {
   createOrder,
   updateOrderStatus,
@@ -118,6 +123,7 @@ interface OrdersViewProps {
   totalOrdersCount?: number
   pageSize?: number
   currentTabParam?: string
+  paywall?: PaywallContextProps
 }
 
 interface DraftItem {
@@ -1403,16 +1409,87 @@ export default function OrdersView({
   totalOrdersCount,
   pageSize = 20,
   currentTabParam,
+  paywall,
 }: OrdersViewProps) {
   const router = useRouter()
   const [orders, setOrders] = useState<OrderRow[]>(initialOrders)
   const [customers, setCustomers] = useState<OrderCustomerOption[]>(initialCustomers)
   const [activeTab, setActiveTab] = useState<'all' | 'packing'>(mode === 'packing' ? 'packing' : initialTab)
   const [ordersTab, setOrdersTab] = useState<'active' | 'history'>(initialOrdersTab)
-  const [showModal, setShowModal] = useState(initialOpenModal)
+
+  const resolvedPaywall: PaywallContextProps = paywall ?? {
+    plan: 'free_mvp',
+    storeId: null,
+    storeName: companyName,
+    ordersUsed: totalOrdersCount ?? initialOrders.length,
+    freeOrdersLimit: 20,
+    tmoneyPhone: '+228 90 12 34 56',
+    floozPhone: '+228 96 12 34 56',
+  }
+
+  const isFreeLimitReached =
+    resolvedPaywall.plan === 'free_mvp' &&
+    resolvedPaywall.ordersUsed >= (resolvedPaywall.freeOrdersLimit || 20)
+
+  const [showModal, setShowModal] = useState(
+    initialOpenModal && !isFreeLimitReached
+  )
+  const [paywallOpen, setPaywallOpen] = useState<boolean>(isFreeLimitReached)
+  const [paywallReason, setPaywallReason] = useState<
+    'quota' | 'bilan' | 'csv' | 'manual'
+  >(isFreeLimitReached ? 'quota' : 'manual')
   const [assigningOrder, setAssigningOrder] = useState<OrderRow | null>(null)
   const [search, setSearch] = useState('')
   const [isPending, startTransition] = useTransition()
+
+  function handleOpenNewOrder() {
+    if (isFreeLimitReached) {
+      setPaywallReason('quota')
+      setPaywallOpen(true)
+      return
+    }
+    setShowModal(true)
+  }
+
+  function handleExportOrdersCsv() {
+    if (resolvedPaywall.plan === 'free_mvp') {
+      setPaywallReason('csv')
+      setPaywallOpen(true)
+      return
+    }
+    const headers = [
+      'Colis',
+      'Client',
+      'Telephone',
+      'Quartier',
+      'Statut',
+      'Montant_FCFA',
+      'Livraison_FCFA',
+      'Date',
+    ]
+    const rows = orders.map((o) => [
+      o.parcel_number || `#${o.id.slice(0, 6).toUpperCase()}`,
+      o.customers?.full_name || 'Client',
+      o.customers?.phone || '',
+      o.customers?.city || o.customers?.address || 'Lomé',
+      o.status,
+      String(o.total_amount ?? 0),
+      String(o.delivery_fee ?? 0),
+      o.ordered_at,
+    ])
+    const csvContent = [headers, ...rows]
+      .map((r) =>
+        r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')
+      )
+      .join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `kaba-kaba-commandes-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const isPackingMode = mode === 'packing' || activeTab === 'packing'
 
@@ -1533,6 +1610,14 @@ export default function OrdersView({
 
   return (
     <>
+      <FreeOrdersGaugeBanner
+        paywall={resolvedPaywall}
+        onOpenPaywall={() => {
+          setPaywallReason(isFreeLimitReached ? 'quota' : 'manual')
+          setPaywallOpen(true)
+        }}
+      />
+
       {isPackingMode ? (
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -1543,21 +1628,32 @@ export default function OrdersView({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Ventes & Commandes</h1>
             <p className="text-slate-500 text-sm mt-0.5">
               {activeOrders.length} commande{activeOrders.length !== 1 ? 's' : ''} active{activeOrders.length !== 1 ? 's' : ''} • {closedOrders.length} clôturée{closedOrders.length !== 1 ? 's' : ''}
             </p>
           </div>
-          {canManage && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowModal(true)}
-              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-primary-hover transition text-sm shadow-xs"
+              type="button"
+              onClick={handleExportOrdersCsv}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl font-semibold transition text-xs sm:text-sm shadow-2xs cursor-pointer"
             >
-              <span className="text-lg leading-none">+</span> Nouvelle commande
+              <Download className="w-4 h-4 text-slate-600" />
+              <span>Exporter CSV</span>
             </button>
-          )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={handleOpenNewOrder}
+                className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-primary-hover transition text-sm shadow-xs cursor-pointer"
+              >
+                <span className="text-lg leading-none">+</span> Nouvelle commande
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -2318,13 +2414,20 @@ export default function OrdersView({
 
       {canManage && !isPackingMode && (
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleOpenNewOrder}
           className="sm:hidden fixed bottom-20 right-4 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-primary-hover transition z-20"
           title="Nouvelle commande"
         >
           +
         </button>
       )}
+
+      <InAppPaywallModal
+        isOpen={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        paywall={resolvedPaywall}
+        triggerReason={paywallReason}
+      />
 
       {showModal && (
         <NewOrderModal

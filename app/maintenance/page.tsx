@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { parsePlatformMaintenanceAndMerchants } from '@/lib/quotas'
 import { MaintenanceClient } from './MaintenanceClient'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,10 @@ export default async function MaintenancePage() {
       saasLogoUrl = data.saas_logo_url.trim()
     }
     if (data?.maintenance_message?.trim()) {
-      maintenanceMessage = data.maintenance_message.trim()
+      const parsed = parsePlatformMaintenanceAndMerchants(
+        data as Record<string, unknown>
+      )
+      maintenanceMessage = parsed.cleanMaintenanceMessage
     }
   } catch {
     // Valeurs par défaut

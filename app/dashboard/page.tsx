@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProfile } from '@/lib/supabase/ensure-profile'
 import { getStorePlanState } from '@/lib/supabase/store-status'
+import { getSellerPaywallInfo } from '@/lib/quotas'
 import { SuspendedAccountBanner } from '@/components/dashboard/SuspendedAccountBanner'
 import DashboardLayout from './_components/DashboardLayout'
 import OwnerDashboardView, {
@@ -57,6 +58,7 @@ export default async function DashboardPage({
     { data: deliveries },
     { data: payments },
     { data: settlements },
+    paywallInfo,
   ] = await Promise.all([
     supabase
       .from('orders')
@@ -70,6 +72,7 @@ export default async function DashboardPage({
     supabase
       .from('courier_settlements')
       .select('id, amount, status, paid_at, created_at'),
+    getSellerPaywallInfo(supabase, user.id, profile.company_id, companyName),
   ])
 
   return (
@@ -101,6 +104,7 @@ export default async function DashboardPage({
         deliveries={(deliveries ?? []) as DashboardDeliveryItem[]}
         payments={(payments ?? []) as DashboardPaymentItem[]}
         settlements={(settlements ?? []) as DashboardSettlementItem[]}
+        paywall={paywallInfo}
       />
     </DashboardLayout>
   )

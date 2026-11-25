@@ -57,12 +57,14 @@ type Lang = 'fr' | 'en'
 export function SuperAdminControlView({
   initialSaasName,
   initialSaasLogoUrl,
-  initialFreeOrders = 30,
+  initialFreeOrders = 20,
   initialFreeDrivers = 1,
   initialFreeAiTrials = 3,
   initialProDrivers = 3,
   initialMaintenanceMode = false,
   initialMaintenanceMessage = '',
+  initialTmoneyPhone = '+228 90 12 34 56',
+  initialFloozPhone = '+228 96 12 34 56',
   initialSystemLogs = [],
   stores,
   totalStoresCount,
@@ -78,6 +80,8 @@ export function SuperAdminControlView({
   initialProDrivers?: number
   initialMaintenanceMode?: boolean
   initialMaintenanceMessage?: string | null
+  initialTmoneyPhone?: string
+  initialFloozPhone?: string
   initialSystemLogs?: SystemLogItem[]
   stores: SuperAdminStoreRow[]
   totalStoresCount?: number
@@ -95,6 +99,8 @@ export function SuperAdminControlView({
   const [freeDrivers, setFreeDrivers] = useState(initialFreeDrivers)
   const [freeAiTrials, setFreeAiTrials] = useState(initialFreeAiTrials)
   const [proDrivers, setProDrivers] = useState(initialProDrivers)
+  const [tmoneyPhone, setTmoneyPhone] = useState(initialTmoneyPhone)
+  const [floozPhone, setFloozPhone] = useState(initialFloozPhone)
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(
     initialMaintenanceMode
   )
@@ -172,6 +178,8 @@ export function SuperAdminControlView({
         proMaxDrivers: proDrivers,
         isMaintenanceMode: nextMaint,
         maintenanceMessage: maintenanceMessage.trim() || null,
+        merchantTmoneyPhone: tmoneyPhone.trim() || '+228 90 12 34 56',
+        merchantFloozPhone: floozPhone.trim() || '+228 96 12 34 56',
       })
 
       setFeedback(
@@ -604,6 +612,45 @@ export function SuperAdminControlView({
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
             />
           </div>
+        </div>
+
+        {/* Numéros marchands T-Money & Flooz (affichés dans la modale Paywall In-App) */}
+        <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
+          <p className="text-xs font-extrabold uppercase tracking-wider text-[#0F172A]">
+            Numéros Marchands Mobile Money (Modale Paywall In-App)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-amber-700 mb-1">
+                Numéro Marchand T-Money (Togocom) *
+              </label>
+              <input
+                type="text"
+                required
+                value={tmoneyPhone}
+                onChange={(e) => setTmoneyPhone(e.target.value)}
+                placeholder="+228 90 12 34 56"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-200 text-sm font-bold text-[#0F172A]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-sky-700 mb-1">
+                Numéro Marchand Flooz (Moov Africa) *
+              </label>
+              <input
+                type="text"
+                required
+                value={floozPhone}
+                onChange={(e) => setFloozPhone(e.target.value)}
+                placeholder="+228 96 12 34 56"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-sky-50/50 border border-sky-200 text-sm font-bold text-[#0F172A]"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-[#64748B]">
+            Ces numéros sont affichés avec copie en 1 clic dans la modale Paywall In-App dès 20 commandes gratuites.
+          </p>
         </div>
 
         {/* Quotas par forfait modifiables dans /admin */}

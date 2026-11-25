@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { parsePlatformMaintenanceAndMerchants } from '@/lib/quotas'
 import { AdminMetrics } from '@/app/super-admin/_components/AdminMetrics'
 import type { SuperAdminStoreRow } from '@/app/super-admin/_components/StoresManagementTable'
 import type { SubscriptionStatus } from '@/types/database.types'
@@ -221,7 +222,9 @@ export default async function AdminPage({
           initialSaasName={platformRes.data?.saas_name || 'Kaba Kaba'}
           initialSaasLogoUrl={platformRes.data?.saas_logo_url ?? null}
           initialFreeOrders={
-            Number(platformRes.data?.free_mvp_max_orders_month) || 30
+            Number(platformRes.data?.free_mvp_max_orders_month) === 30
+              ? 20
+              : Number(platformRes.data?.free_mvp_max_orders_month) || 20
           }
           initialFreeDrivers={
             Number(platformRes.data?.free_mvp_max_drivers) || 1
@@ -234,7 +237,19 @@ export default async function AdminPage({
             platformRes.data?.is_maintenance_mode
           )}
           initialMaintenanceMessage={
-            platformRes.data?.maintenance_message ?? null
+            parsePlatformMaintenanceAndMerchants(
+              platformRes.data as Record<string, unknown> | null
+            ).cleanMaintenanceMessage
+          }
+          initialTmoneyPhone={
+            parsePlatformMaintenanceAndMerchants(
+              platformRes.data as Record<string, unknown> | null
+            ).tmoneyPhone
+          }
+          initialFloozPhone={
+            parsePlatformMaintenanceAndMerchants(
+              platformRes.data as Record<string, unknown> | null
+            ).floozPhone
           }
           initialSystemLogs={(systemLogsRes.data ?? []) as SystemLogItem[]}
           stores={storeRows}
