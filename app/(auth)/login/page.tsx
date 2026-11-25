@@ -4,52 +4,106 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { forgotPasswordSchema, loginSchema } from '@/lib/validations/auth'
 import { formatAuthError } from '@/lib/auth-errors'
 import { activateCourierAccount } from '@/app/actions/couriers'
 import { KabaKabaLogo } from '@/components/ui/KabaKabaLogo'
 
+function normalizeIdentifierToEmail(rawInput: string): {
+  resolvedEmail: string
+  isPhone: boolean
+  displayPhone?: string
+} {
+  const trimmed = rawInput.trim()
+  if (trimmed.includes('@')) {
+    return {
+      resolvedEmail: trimmed.toLowerCase(),
+      isPhone: false,
+    }
+  }
+
+  const digits = trimmed.replace(/\D/g, '')
+  if (digits.length >= 8) {
+    const normalizedDigits =
+      digits.length === 8
+        ? `228${digits}`
+        : digits.startsWith('00228')
+          ? digits.slice(2)
+          : digits
+    return {
+      resolvedEmail: `${normalizedDigits}@kabakaba.tg`,
+      isPhone: true,
+      displayPhone: `+${normalizedDigits}`,
+    }
+  }
+
+  return {
+    resolvedEmail: trimmed.toLowerCase(),
+    isPhone: false,
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail]       = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
-  const [errors, setErrors]     = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [serverError, setServerError] = useState<string | null>(null)
+  const [rawSupabaseError, setRawSupabaseError] = useState<string | null>(null)
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendMessage, setResendMessage] = useState<string | null>(null)
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setErrors({})
     setServerError(null)
+    setRawSupabaseError(null)
     setEmailNotConfirmed(false)
     setResendMessage(null)
 
     try {
-      const result = loginSchema.safeParse({ email, password })
-      if (!result.success) {
-        const fieldErrors: Record<string, string> = {}
-        result.error.issues.forEach(err => {
-          if (err.path[0]) fieldErrors[err.path[0] as string] = err.message
-        })
+      const cleanId = identifier.trim()
+      const fieldErrors: Record<string, string> = {}
+
+      if (!cleanId) {
+        fieldErrors.email =
+          'Veuillez saisir votre adresse email ou votre numéro WhatsApp (+228).'
+      } else if (!cleanId.includes('@') && cleanId.replace(/\D/g, '').length < 8) {
+        fieldErrors.email =
+          'Saisissez un email valide (ex: vous@exemple.com) ou un numéro à 8 chiffres (ex: 90 12 34 56).'
+      }
+
+      if (!password) {
+        fieldErrors.password = 'Mot de passe requis.'
+      }
+
+      if (Object.keys(fieldErrors).length > 0) {
         setErrors(fieldErrors)
         setLoading(false)
         return
       }
 
+      const { resolvedEmail, isPhone } = normalizeIdentifierToEmail(cleanId)
+
       const supabase = createClient()
       const { data, error } = await supabase.auth.signInWithPassword({
-        email:    result.data.email.trim(),
-        password: result.data.password,
+        email: resolvedEmail,
+        password,
       })
 
       if (error) {
         setEmailNotConfirmed(error.message === 'Email not confirmed')
         const formatted = formatAuthError(error.message)
-        setServerError(formatted || error.message || 'Email ou mot de passe incorrect.')
+        setServerError(
+          isPhone && error.message === 'Invalid login credentials'
+            ? 'Identifiants invalides avec ce numéro. Si vous avez créé votre compte avec une adresse email, connectez-vous avec votre email (ou créez votre compte gratuit).'
+            : formatted || error.message || 'Email ou mot de passe incorrect.'
+        )
+        setRawSupabaseError(
+          `Supabase Auth (${error.status ?? '400'}${error.code ? ` / ${error.code}` : ''}) : "${error.message}" [identifiant testé : ${resolvedEmail}]`
+        )
         setLoading(false)
         return
       }
@@ -58,7 +112,8 @@ export default function LoginPage() {
       if (data.user) {
         try {
           await activateCourierAccount({
-            invitedProfileId: (data.user.user_metadata?.courier_profile_id as string) || null,
+            invitedProfileId:
+              (data.user.user_metadata?.courier_profile_id as string) || null,
             email: data.user.email || null,
           })
 
@@ -68,10 +123,11 @@ export default function LoginPage() {
             .eq('id', data.user.id)
             .maybeSingle()
 
-          if (profile?.role === 'super_admin') {
-            destination = '/super-admin'
+          if (profile?.role === 'super_admin' || profile?.role === 'admin') {
+            destination = '/admin'
           } else if (
             profile?.role === 'courier' ||
+            profile?.role === 'driver' ||
             data.user.user_metadata?.role === 'courier'
           ) {
             destination = '/mes-livraisons'
@@ -81,12 +137,9 @@ export default function LoginPage() {
         }
       }
 
-      // Redirection relative stricte : navigation client puis rechargement plein écran si nécessaire
       router.push(destination)
       router.refresh()
 
-      // Sur certains navigateurs mobiles (ex: Safari iOS via IP locale), forcer la navigation plein écran
-      // pour garantir la transmission des cookies de session fraîchement écrits
       if (typeof window !== 'undefined') {
         setTimeout(() => {
           if (window.location.pathname === '/login') {
@@ -94,12 +147,14 @@ export default function LoginPage() {
           }
         }, 800)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Connexion interrompue ou signal réseau trop faible. Veuillez réessayer.'
       console.error('Erreur connexion:', err)
-      setServerError(
-        err?.message ||
-          'Connexion interrompue ou signal réseau trop faible. Veuillez réessayer.'
-      )
+      setServerError(msg)
+      setRawSupabaseError(`Exception client : ${msg}`)
       setLoading(false)
     }
   }
@@ -108,9 +163,9 @@ export default function LoginPage() {
     setResending(true)
     setResendMessage(null)
 
-    const parsed = forgotPasswordSchema.safeParse({ email })
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? 'Adresse email invalide.')
+    const { resolvedEmail } = normalizeIdentifierToEmail(identifier)
+    if (!resolvedEmail || !resolvedEmail.includes('@')) {
+      setServerError('Adresse email invalide pour le renvoi.')
       setResending(false)
       return
     }
@@ -118,7 +173,7 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email: parsed.data.email,
+      email: resolvedEmail,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
       },
@@ -126,8 +181,11 @@ export default function LoginPage() {
 
     if (error) {
       setServerError(formatAuthError(error.message))
+      setRawSupabaseError(`Supabase Resend : "${error.message}"`)
     } else {
-      setResendMessage('Email de confirmation renvoyé. Vérifiez votre boîte mail et vos spams.')
+      setResendMessage(
+        'Email de confirmation renvoyé. Vérifiez votre boîte mail et vos spams.'
+      )
     }
     setResending(false)
   }
@@ -147,24 +205,30 @@ export default function LoginPage() {
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Connexion</h2>
         <p className="text-gray-500 text-sm mb-6">
           Pas encore de compte ?{' '}
-          <Link href="/register" className="text-blue-700 font-semibold hover:underline">
+          <Link
+            href="/signup"
+            className="text-blue-700 font-semibold hover:underline"
+          >
             Créer un compte
           </Link>
         </p>
 
         <form onSubmit={handleLogin} className="space-y-4" noValidate>
-          {/* Email */}
+          {/* Email ou WhatsApp */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Adresse email
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Adresse email ou Numéro WhatsApp (+228)
             </label>
             <input
               id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
+              type="text"
+              autoComplete="username"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="vous@exemple.com ou 90 12 34 56"
               className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition ${
                 errors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'
               }`}
@@ -177,7 +241,10 @@ export default function LoginPage() {
           {/* Mot de passe */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Mot de passe
               </label>
               <Link
@@ -192,7 +259,7 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 transition ${
                 errors.password ? 'border-red-400 bg-red-50' : 'border-gray-200'
@@ -209,6 +276,11 @@ export default function LoginPage() {
                 <span className="text-base leading-none mt-0.5">⚠️</span>
                 <span>{serverError}</span>
               </div>
+              {rawSupabaseError && (
+                <p className="text-xs font-mono bg-red-100/80 border border-red-200 rounded-lg px-2.5 py-1.5 text-red-900 break-words">
+                  {rawSupabaseError}
+                </p>
+              )}
               {emailNotConfirmed && (
                 <button
                   type="button"
@@ -216,7 +288,9 @@ export default function LoginPage() {
                   onClick={handleResendConfirmation}
                   className="text-xs font-bold text-blue-800 underline hover:opacity-80 disabled:opacity-50 block mt-1"
                 >
-                  {resending ? 'Envoi en cours...' : 'Renvoyer l\'email de confirmation'}
+                  {resending
+                    ? 'Envoi en cours...'
+                    : "Renvoyer l'email de confirmation"}
                 </button>
               )}
             </div>
@@ -232,7 +306,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full min-h-[48px] bg-blue-800 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 mt-2 shadow-md active:scale-98"
+            className="w-full min-h-[48px] bg-blue-800 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 mt-2 shadow-md active:scale-98 cursor-pointer"
           >
             {loading ? (
               <>
