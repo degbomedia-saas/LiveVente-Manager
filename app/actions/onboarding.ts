@@ -16,8 +16,18 @@ const onboardingSchema = z.object({
   whatsappPhone: z
     .string()
     .trim()
-    .min(6, 'Veuillez saisir un numéro WhatsApp valide.')
-    .max(30, 'Numéro trop long.'),
+    .min(8, 'Veuillez saisir votre numéro WhatsApp (+228) complet.')
+    .max(30, 'Numéro trop long.')
+    .refine((val) => {
+      const digits = val.replace(/\D/g, '')
+      const localDigits =
+        digits.startsWith('228') && digits.length > 8
+          ? digits.slice(3)
+          : digits === '228'
+            ? ''
+            : digits
+      return localDigits.length >= 8
+    }, 'Le numéro WhatsApp (+228) est obligatoire (8 chiffres minimum).'),
   city: z.string().trim().min(2, 'Veuillez indiquer la ville ou le quartier.').max(80),
   paletteKey: z.enum(['emerald', 'sky', 'coral', 'violet']),
   logoUrl: z.string().trim().max(2_500_000).nullable().optional(),

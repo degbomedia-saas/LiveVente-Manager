@@ -171,10 +171,29 @@ export function OnboardingForm({
     e.preventDefault()
     setError(null)
 
+    const rawDigits = whatsappPhone.replace(/\D/g, '')
+    const localDigits =
+      rawDigits.startsWith('228') && rawDigits.length > 8
+        ? rawDigits.slice(3)
+        : rawDigits === '228'
+          ? ''
+          : rawDigits
+
+    if (localDigits.length < 8) {
+      setError(
+        'Le numéro WhatsApp (+228) est obligatoire : saisissez au moins 8 chiffres (ex : +228 90 12 34 56).'
+      )
+      return
+    }
+
+    const formattedWhatsapp = rawDigits.startsWith('228')
+      ? `+${rawDigits.slice(0, 3)} ${rawDigits.slice(3)}`
+      : `+228 ${localDigits}`
+
     startTransition(async () => {
       const res = await completeSellerOnboarding({
         storeName,
-        whatsappPhone,
+        whatsappPhone: formattedWhatsapp,
         city,
         paletteKey,
         logoUrl,

@@ -4,7 +4,10 @@ import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { parsePlatformMaintenanceAndMerchants } from '@/lib/quotas'
 import { AdminMetrics } from '@/app/super-admin/_components/AdminMetrics'
-import type { SuperAdminStoreRow } from '@/app/super-admin/_components/StoresManagementTable'
+import type {
+  StorePreviewOrderItem,
+  SuperAdminStoreRow,
+} from '@/app/super-admin/_components/StoresManagementTable'
 import type { SubscriptionStatus } from '@/types/database.types'
 import {
   SuperAdminControlView,
@@ -79,12 +82,19 @@ export default async function AdminPage({
         'company_id, status, trial_ends_at, current_period_ends_at, monthly_price'
       ),
     supabase.from('profiles').select('company_id, full_name, phone, role'),
-    supabase.from('orders').select('company_id'),
+    supabase
+      .from('orders')
+      .select('id, company_id, parcel_number, status, total_amount, ordered_at')
+      .order('ordered_at', { ascending: false }),
     supabase
       .from('subscription_requests')
       .select('*')
       .order('created_at', { ascending: false }),
-    supabase.from('stores').select('id, store_name'),
+    supabase
+      .from('stores')
+      .select(
+        'id, company_id, store_name, whatsapp_phone, city, plan, plan_status'
+      ),
     supabase
       .from('system_logs')
       .select('id, level, source, message, created_at')
@@ -97,9 +107,42 @@ export default async function AdminPage({
   const subscriptions = subscriptionsRes.data ?? []
   const profiles = profilesRes.data ?? []
   const orders = ordersRes.data ?? []
-  const storeNameById = new Map(
-    (storesRes.data ?? []).map((s: any) => [s.id, s.store_name])
-  )
+  const storesData = storesRes.data ?? []
+
+  const storeNameById = new Map<string, string>()
+  const storeByCompanyId = new Map<
+    string,
+    {
+      id: string
+      store_name: string
+      whatsapp_phone: string | null
+      city: string | null
+      plan: 'free_mvp' | 'pro' | 'business'
+      plan_status: 'active' | 'trial' | 'suspended'
+    }
+  >()
+
+  for (const s of storesData as Array<{
+    id: string
+    company_id?: string | null
+    store_name: string
+    whatsapp_phone?: string | null
+    city?: string | null
+    plan?: 'free_mvp' | 'pro' | 'business'
+    plan_status?: 'active' | 'trial' | 'suspended'
+  }>) {
+    storeNameById.set(s.id, s.store_name)
+    if (s.company_id) {
+      storeByCompanyId.set(s.company_id, {
+        id: s.id,
+        store_name: s.store_name,
+        whatsapp_phone: s.whatsapp_phone ?? null,
+        city: s.city ?? null,
+        plan: s.plan ?? 'free_mvp',
+        plan_status: s.plan_status ?? 'trial',
+      })
+    }
+  }
 
   const subByCompany = new Map<
     string,
@@ -115,7 +158,7 @@ export default async function AdminPage({
       status: s.status as SubscriptionStatus,
       trial_ends_at: s.trial_ends_at,
       current_period_ends_at: s.current_period_ends_at,
-      monthly_price: s.monthly_price ?? 10000,
+      monthly_price: s.monthly_price ?? 5000,
     })
   }
 
@@ -133,13 +176,59 @@ export default async function AdminPage({
     }
   }
 
-  const orderCountByCompany = new Map<string, number>()
-  for (const o of orders) {
-    orderCountByCompany.set(
-      o.company_id,
-      (orderCountByCompany.get(o.company_id) ?? 0) + 1
-    )
+  const orderStatsByCompany = new Map<
+    string,
+    {
+      count: number
+      revenueFcfa: number
+      deliveredCount: number
+      pendingCount: number
+      recentOrders: StorePreviewOrderItem[]
+    }
+  >()
+
+  for (const o of orders as Array<{
+    id: string
+    company_id: string
+    parcel_number?: string | null
+    status?: string | null
+    total_amount?: number | null
+    ordered_at?: string | null
+  }>) {
+    const current = orderStatsByCompany.get(o.company_id) ?? {
+      count: 0,
+      revenueFcfa: 0,
+      deliveredCount: 0,
+      pendingCount: 0,
+      recentOrders: [],
+    }
+    const status = o.status || 'pending'
+    const amount = Number(o.total_amount ?? 0)
+    if (status !== 'cancelled') {
+      current.count += 1
+      current.revenueFcfa += amount
+    }
+    if (status === 'delivered') {
+      current.deliveredCount += 1
+    } else if (status !== 'cancelled') {
+      current.pendingCount += 1
+    }
+    if (current.recentOrders.length < 6) {
+      current.recentOrders.push({
+        id: o.id,
+        numberLabel: o.parcel_number || `#KK-${o.id.slice(0, 4).toUpperCase()}`,
+        amountFcfa: amount,
+        status,
+        orderedAt: o.ordered_at || new Date().toISOString(),
+      })
+    }
+    orderStatsByCompany.set(o.company_id, current)
   }
+
+  const freeOrdersLimit =
+    Number(platformRes.data?.free_mvp_max_orders_month) === 30
+      ? 20
+      : Number(platformRes.data?.free_mvp_max_orders_month) || 20
 
   const now = Date.now()
   let activeStores = 0
@@ -149,15 +238,41 @@ export default async function AdminPage({
 
   const storeRows: SuperAdminStoreRow[] = companies.map((company) => {
     const sub = subByCompany.get(company.id)
+    const storeRow = storeByCompanyId.get(company.id)
     const owner = ownerByCompany.get(company.id)
-    const status: SubscriptionStatus = sub?.status ?? 'trialing'
-    const monthlyPrice = sub?.monthly_price ?? 10000
+    const ordStats = orderStatsByCompany.get(company.id)
+
+    const planCode =
+      storeRow?.plan === 'business'
+        ? 'business'
+        : storeRow?.plan === 'pro' || sub?.status === 'active'
+          ? 'pro'
+          : 'free_mvp'
+
+    const monthlyPrice =
+      planCode === 'business'
+        ? 25000
+        : sub?.monthly_price === 15000
+          ? 15000
+          : 5000
+
+    let status: SubscriptionStatus = sub?.status ?? 'trialing'
+    if (storeRow?.plan_status === 'suspended') {
+      status = 'expired'
+    } else if (
+      storeRow?.plan === 'pro' ||
+      storeRow?.plan === 'business' ||
+      sub?.status === 'active'
+    ) {
+      status = 'active'
+    }
+
     const trialEndsAt = sub?.trial_ends_at ?? null
     const currentPeriodEndsAt = sub?.current_period_ends_at ?? null
 
     if (status === 'active') {
       activeStores += 1
-      mrrFcfa += monthlyPrice
+      mrrFcfa += monthlyPrice === 15000 ? 5000 : monthlyPrice
     } else if (
       status === 'trialing' &&
       (!trialEndsAt || new Date(trialEndsAt).getTime() >= now)
@@ -167,22 +282,51 @@ export default async function AdminPage({
       expiredStores += 1
     }
 
+    const planLabel =
+      status === 'active'
+        ? planCode === 'business'
+          ? 'Actif — Plan Business 25 000 F/m'
+          : monthlyPrice === 15000
+            ? 'Actif — Plan Trimestriel 15 000 F/3m'
+            : 'Actif — Plan Solo 5 000 F/m'
+        : status === 'trialing'
+          ? 'Essai — Plan Découverte 0 F'
+          : planCode === 'business'
+            ? 'Suspendu — Plan Business 25 000 F/m'
+            : 'Suspendu — Plan Solo 5 000 F/m'
+
     return {
       id: company.id,
-      name: company.name,
+      name: storeRow?.store_name || company.name,
       createdAt: company.created_at,
       ownerName: owner?.full_name ?? 'Propriétaire',
-      ownerPhone: owner?.phone ?? null,
-      ordersCount: orderCountByCompany.get(company.id) ?? 0,
+      ownerPhone: owner?.phone || storeRow?.whatsapp_phone || null,
+      city: storeRow?.city || 'Lomé',
+      ordersCount: ordStats?.count ?? 0,
+      freeOrdersLimit,
       status,
+      planCode,
+      planLabel,
       trialEndsAt,
       currentPeriodEndsAt,
       monthlyPrice,
+      totalRevenueFcfa: ordStats?.revenueFcfa ?? 0,
+      deliveredOrdersCount: ordStats?.deliveredCount ?? 0,
+      pendingOrdersCount: ordStats?.pendingCount ?? 0,
+      recentOrders: ordStats?.recentOrders ?? [],
     }
   })
 
   const requestItems: SubscriptionRequestItem[] = (requestsRes.data ?? []).map(
-    (r: any) => ({
+    (r: {
+      id: string
+      seller_id: string
+      requested_plan: 'free_mvp' | 'pro' | 'business'
+      mobile_money_ref: string
+      phone: string
+      status: 'pending' | 'approved' | 'rejected'
+      created_at: string
+    }) => ({
       id: r.id,
       seller_id: r.seller_id,
       storeName: storeNameById.get(r.seller_id) || 'Boutique',
@@ -192,6 +336,10 @@ export default async function AdminPage({
       status: r.status,
       created_at: r.created_at,
     })
+  )
+
+  const parsedPlatform = parsePlatformMaintenanceAndMerchants(
+    platformRes.data as Record<string, unknown> | null
   )
 
   return (
@@ -204,7 +352,8 @@ export default async function AdminPage({
             </div>
             <div>
               <p className="text-sm sm:text-base font-extrabold">
-                {platformRes.data?.saas_name || 'Kaba Kaba'} — Super Admin (/admin)
+                {platformRes.data?.saas_name || 'Kaba Kaba'} — Direction &amp;
+                Abonnements
               </p>
               <p className="text-xs text-[#94A3B8]">
                 {profile?.full_name || user.email}
@@ -217,7 +366,7 @@ export default async function AdminPage({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#131C31] hover:bg-[#1E293B] border border-[#1E293B]"
           >
             <ArrowLeft className="w-4 h-4 text-[#10B981]" />
-            <span>Dashboard</span>
+            <span>Tableau de bord</span>
           </Link>
         </div>
       </header>
@@ -235,11 +384,7 @@ export default async function AdminPage({
         <SuperAdminControlView
           initialSaasName={platformRes.data?.saas_name || 'Kaba Kaba'}
           initialSaasLogoUrl={platformRes.data?.saas_logo_url ?? null}
-          initialFreeOrders={
-            Number(platformRes.data?.free_mvp_max_orders_month) === 30
-              ? 20
-              : Number(platformRes.data?.free_mvp_max_orders_month) || 20
-          }
+          initialFreeOrders={freeOrdersLimit}
           initialFreeDrivers={
             Number(platformRes.data?.free_mvp_max_drivers) || 1
           }
@@ -250,21 +395,9 @@ export default async function AdminPage({
           initialMaintenanceMode={Boolean(
             platformRes.data?.is_maintenance_mode
           )}
-          initialMaintenanceMessage={
-            parsePlatformMaintenanceAndMerchants(
-              platformRes.data as Record<string, unknown> | null
-            ).cleanMaintenanceMessage
-          }
-          initialTmoneyPhone={
-            parsePlatformMaintenanceAndMerchants(
-              platformRes.data as Record<string, unknown> | null
-            ).tmoneyPhone
-          }
-          initialFloozPhone={
-            parsePlatformMaintenanceAndMerchants(
-              platformRes.data as Record<string, unknown> | null
-            ).floozPhone
-          }
+          initialMaintenanceMessage={parsedPlatform.cleanMaintenanceMessage}
+          initialTmoneyPhone={parsedPlatform.tmoneyPhone}
+          initialFloozPhone={parsedPlatform.floozPhone}
           initialSystemLogs={(systemLogsRes.data ?? []) as SystemLogItem[]}
           stores={storeRows}
           totalStoresCount={totalStoresCount}

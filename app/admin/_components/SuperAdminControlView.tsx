@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Activity,
   AlertTriangle,
+  Briefcase,
   Check,
-  Globe,
+  CheckCircle2,
   RefreshCw,
   Settings,
   Smartphone,
@@ -17,7 +18,6 @@ import {
 import {
   clearAdminSystemLogs,
   handleSubscriptionRequest,
-  recordAdminSystemLog,
   updatePlatformSettings,
 } from '@/app/actions/step4'
 import { useBrandConfig } from '@/lib/config/brand'
@@ -52,7 +52,46 @@ interface HealthCheckState {
   timestamp: string | null
 }
 
-type Lang = 'fr' | 'en'
+type AdminTab = 'business' | 'system'
+
+function parseApprovedPaymentDetails(req: SubscriptionRequestItem): {
+  amountLabel: string
+  operatorLabel: string
+  cleanRef: string
+} {
+  const raw = req.mobile_money_ref || ''
+  let amountLabel =
+    req.requested_plan === 'business' ? '25 000 FCFA' : '5 000 FCFA'
+  if (raw.includes('15 000') || raw.includes('15000')) {
+    amountLabel = '15 000 FCFA'
+  } else if (raw.includes('25 000') || raw.includes('25000')) {
+    amountLabel = '25 000 FCFA'
+  } else if (raw.includes('5 000') || raw.includes('5000')) {
+    amountLabel = '5 000 FCFA'
+  }
+
+  const cleanRef = raw.replace(/^\[[^\]]+\]\s*/, '').trim() || raw
+  const upperRef = cleanRef.toUpperCase()
+  const phoneDigits = (req.phone || '').replace(/\D/g, '')
+  const localPrefix =
+    phoneDigits.startsWith('228') && phoneDigits.length >= 5
+      ? phoneDigits.slice(3, 5)
+      : phoneDigits.slice(0, 2)
+
+  let operatorLabel = 'T-Money'
+  if (
+    upperRef.includes('FLOOZ') ||
+    upperRef.includes('MOOV') ||
+    upperRef.startsWith('FL-') ||
+    ['96', '97', '98', '99', '79'].includes(localPrefix)
+  ) {
+    operatorLabel = 'Flooz (Moov)'
+  } else {
+    operatorLabel = 'T-Money (Togocom)'
+  }
+
+  return { amountLabel, operatorLabel, cleanRef }
+}
 
 export function SuperAdminControlView({
   initialSaasName,
@@ -91,7 +130,7 @@ export function SuperAdminControlView({
 }) {
   const router = useRouter()
   const { setBrand } = useBrandConfig()
-  const [lang, setLang] = useState<Lang>('fr')
+  const [activeTab, setActiveTab] = useState<AdminTab>('business')
 
   const [saasName, setSaasName] = useState(initialSaasName)
   const [saasLogoUrl, setSaasLogoUrl] = useState(initialSaasLogoUrl ?? '')
@@ -119,6 +158,19 @@ export function SuperAdminControlView({
   })
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const pendingRequests = useMemo(
+    () => reqList.filter((r) => r.status === 'pending'),
+    [reqList]
+  )
+
+  const validatedPayments = useMemo(
+    () =>
+      reqList
+        .filter((r) => r.status === 'approved')
+        .slice(0, 20),
+    [reqList]
+  )
 
   async function checkHealth() {
     setHealth((prev) => ({ ...prev, status: 'loading' }))
@@ -185,9 +237,7 @@ export function SuperAdminControlView({
       setFeedback(
         'error' in res && res.error
           ? res.error
-          : lang === 'fr'
-            ? 'Configuration globale, Mode Maintenance & Quotas SaaS enregistrés.'
-            : 'Global settings, Maintenance Mode & SaaS Quotas saved.'
+          : 'Vos paramètres de marque, numéros marchands et quotas ont été enregistrés.'
       )
       void checkHealth()
       router.refresh()
@@ -217,35 +267,10 @@ export function SuperAdminControlView({
       )
       setFeedback(
         decision === 'approved'
-          ? `Demande Mobile Money de "${req.storeName}" approuvée (${req.requested_plan.toUpperCase()}).`
-          : `Demande de "${req.storeName}" rejetée.`
+          ? `Paiement Mobile Money de "${req.storeName}" validé. Le forfait est maintenant actif.`
+          : `Demande de "${req.storeName}" refusée.`
       )
       router.refresh()
-    })
-  }
-
-  function handleTestErrorLog() {
-    startTransition(async () => {
-      const res = await recordAdminSystemLog({
-        level: 'error',
-        source: '/admin (test)',
-        message:
-          lang === 'fr'
-            ? 'Test de journalisation erreur serveur (system_logs)'
-            : 'Server error log test entry (system_logs)',
-      })
-      if ('error' in res && res.error) {
-        setFeedback(
-          `Exécutez supabase/migrations/023_maintenance_and_system_logs.sql (${res.error})`
-        )
-      } else {
-        setFeedback(
-          lang === 'fr'
-            ? 'Entrée de test enregistrée dans system_logs.'
-            : 'Test entry recorded in system_logs.'
-        )
-        router.refresh()
-      }
     })
   }
 
@@ -254,50 +279,51 @@ export function SuperAdminControlView({
       const res = await clearAdminSystemLogs()
       if (!('error' in res && res.error)) {
         setLogs([])
-        setFeedback(
-          lang === 'fr'
-            ? 'Journaux system_logs purgés.'
-            : 'System logs cleared.'
-        )
+        setFeedback("Journal d'activité vidé.")
         router.refresh()
       }
     })
   }
 
   return (
-    <div className="space-y-8">
-      {/* Sélecteur de langue FR / EN */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-          {lang === 'fr'
-            ? 'Pilotage Production & Fiabilité Kaba Kaba'
-            : 'Production Reliability & Kaba Kaba Control'}
-        </p>
-        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-bold">
-          <Globe className="w-3.5 h-3.5 text-slate-500 ml-2 mr-1" />
-          <button
-            type="button"
-            onClick={() => setLang('fr')}
-            className={`px-2.5 py-1 rounded-lg cursor-pointer ${
-              lang === 'fr'
-                ? 'bg-[#0F172A] text-white'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            FR
-          </button>
-          <button
-            type="button"
-            onClick={() => setLang('en')}
-            className={`px-2.5 py-1 rounded-lg cursor-pointer ${
-              lang === 'en'
-                ? 'bg-[#0F172A] text-white'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            EN
-          </button>
-        </div>
+    <div className="space-y-6">
+      {/* Navigation par 2 onglets : Pilotage Business (par défaut) & Système & Maintenance */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('business')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+            activeTab === 'business'
+              ? 'bg-[#0F172A] text-white shadow-sm'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>Pilotage Business</span>
+          {pendingRequests.length > 0 && (
+            <span className="inline-flex items-center justify-center rounded-full bg-rose-600 text-white px-2 py-0.5 text-[11px] font-black">
+              {pendingRequests.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('system')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+            activeTab === 'system'
+              ? 'bg-[#0F172A] text-white shadow-sm'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <Wrench className="w-4 h-4" />
+          <span>Système &amp; Maintenance</span>
+          {isMaintenanceMode && (
+            <span className="inline-flex items-center rounded-full bg-amber-500 text-white px-2 py-0.5 text-[10px] font-black">
+              MAINTENANCE ON
+            </span>
+          )}
+        </button>
       </div>
 
       {feedback && (
@@ -306,524 +332,573 @@ export function SuperAdminControlView({
         </div>
       )}
 
-      {/* 0. Mode Maintenance ON/OFF + Santé Supabase (/api/health) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Carte Mode Maintenance */}
-        <div
-          className={`rounded-2xl border p-6 shadow-2xs space-y-4 transition ${
-            isMaintenanceMode
-              ? 'bg-amber-50/70 border-amber-300'
-              : 'bg-white border-slate-200'
-          }`}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div
-                className={`h-10 w-10 rounded-xl flex items-center justify-center ${
-                  isMaintenanceMode
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-slate-100 text-slate-700'
+      {activeTab === 'business' ? (
+        <div className="space-y-6">
+          {/* 1. Demandes d'upgrade Mobile Money en attente (avec badge rouge) */}
+          <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-xl bg-[#F0F9FF] text-[#0284C7] flex items-center justify-center">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#0F172A]">
+                    Demandes d&apos;activation Mobile Money
+                  </h2>
+                  <p className="text-xs text-[#64748B]">
+                    Vérifiez les références T-Money et Flooz envoyées par les
+                    boutiques pour activer leur forfait.
+                  </p>
+                </div>
+              </div>
+
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold ${
+                  pendingRequests.length > 0
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600'
                 }`}
               >
-                <Wrench className="w-5 h-5" />
+                {pendingRequests.length} en attente
+              </span>
+            </div>
+
+            {pendingRequests.length === 0 ? (
+              <p className="text-xs text-[#64748B] py-2">
+                Aucune demande d&apos;activation en attente actuellement.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {pendingRequests.map((req) => {
+                  const details = parseApprovedPaymentDetails(req)
+                  return (
+                    <div
+                      key={req.id}
+                      className="rounded-xl bg-rose-50/40 border border-rose-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-extrabold text-[#0F172A]">
+                            {req.storeName}
+                          </p>
+                          <span className="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[11px] font-extrabold">
+                            {details.amountLabel}
+                          </span>
+                          <span className="rounded-full bg-slate-100 text-slate-700 px-2.5 py-0.5 text-[11px] font-bold">
+                            {details.operatorLabel}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#64748B] mt-1">
+                          Référence :{' '}
+                          <strong className="font-mono text-[#0F172A]">
+                            {details.cleanRef}
+                          </strong>{' '}
+                          • Tél : {req.phone} •{' '}
+                          {new Date(req.created_at).toLocaleString('fr-FR')}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleDecision(req, 'approved')}
+                          className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Valider le paiement</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleDecision(req, 'rejected')}
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Refuser</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Tableau paginé des boutiques clientes */}
+          <StoresManagementTable
+            stores={stores}
+            currentPage={currentPage}
+            totalCount={totalStoresCount ?? stores.length}
+            pageSize={pageSize}
+            basePath="/admin"
+          />
+
+          {/* 3. Tableau des 20 derniers paiements Mobile Money validés */}
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="p-5 sm:p-6 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#0F172A]">
+                    20 derniers paiements Mobile Money validés
+                  </h2>
+                  <p className="text-xs text-[#64748B]">
+                    Historique des encaissements d&apos;abonnements T-Money et
+                    Flooz approuvés.
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-extrabold text-emerald-800">
+                {validatedPayments.length} validé
+                {validatedPayments.length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {validatedPayments.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500">
+                Aucun paiement Mobile Money validé pour le moment.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-5">Date</th>
+                      <th className="py-3 px-4">Boutique</th>
+                      <th className="py-3 px-4">Montant</th>
+                      <th className="py-3 px-4">Opérateur</th>
+                      <th className="py-3 px-5">Référence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+                    {validatedPayments.map((pay) => {
+                      const details = parseApprovedPaymentDetails(pay)
+                      return (
+                        <tr key={pay.id} className="hover:bg-slate-50/70">
+                          <td className="py-3.5 px-5 text-slate-600 tabular-nums">
+                            {new Date(pay.created_at).toLocaleDateString(
+                              'fr-FR',
+                              {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              }
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                            {pay.storeName}
+                          </td>
+                          <td className="py-3.5 px-4 font-extrabold text-emerald-700 tabular-nums">
+                            {details.amountLabel}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                details.operatorLabel.includes('Flooz')
+                                  ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                                  : 'bg-amber-50 text-amber-900 border border-amber-200'
+                              }`}
+                            >
+                              {details.operatorLabel}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-mono font-bold text-slate-800">
+                            {details.cleanRef}
+                            {pay.phone ? (
+                              <span className="ml-2 font-sans font-normal text-xs text-slate-500">
+                                ({pay.phone})
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Configuration Marque, Numéros Marchands T-Money/Flooz & Quotas */}
+          <form
+            onSubmit={(e) => handleSavePlatform(e)}
+            className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-[#ECFDF5] text-[#10B981] flex items-center justify-center">
+                <Settings className="w-5 h-5" />
               </div>
               <div>
                 <h2 className="text-base font-extrabold text-[#0F172A]">
-                  {lang === 'fr'
-                    ? 'Mode Maintenance (/maintenance)'
-                    : 'Maintenance Mode (/maintenance)'}
+                  Marque, Numéros Marchands &amp; Quotas d&apos;Offres
                 </h2>
                 <p className="text-xs text-[#64748B]">
-                  {lang === 'fr'
-                    ? 'Redirige le trafic vers /maintenance (sauf /admin, /login, /api/health).'
-                    : 'Redirects users to /maintenance (except /admin, /login, /api/health).'}
+                  Personnalisez les coordonnées d&apos;encaissement T-Money /
+                  Flooz et les limites des forfaits.
                 </p>
               </div>
             </div>
 
-            {/* Interrupteur ON / OFF */}
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={handleToggleMaintenance}
-              aria-pressed={isMaintenanceMode}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer ${
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-[#0F172A] mb-1">
+                  Nom de la plateforme *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={saasName}
+                  onChange={(e) => setSaasName(e.target.value)}
+                  placeholder="Kaba Kaba"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#0F172A] mb-1">
+                  Logo de la plateforme (URL optionnelle)
+                </label>
+                <input
+                  type="text"
+                  value={saasLogoUrl}
+                  onChange={(e) => setSaasLogoUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
+                />
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#0F172A]">
+                Numéros Marchands Mobile Money (Modale d&apos;abonnement)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-amber-700 mb-1">
+                    Numéro Marchand T-Money (Togocom) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={tmoneyPhone}
+                    onChange={(e) => setTmoneyPhone(e.target.value)}
+                    placeholder="+228 90 12 34 56"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-200 text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-sky-700 mb-1">
+                    Numéro Marchand Flooz (Moov Africa) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={floozPhone}
+                    onChange={(e) => setFloozPhone(e.target.value)}
+                    placeholder="+228 96 12 34 56"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-sky-50/50 border border-sky-200 text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#0F172A]">
+                Limites par formule d&apos;abonnement
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#64748B] mb-1">
+                    Essai Gratuit : Max commandes
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={freeOrders}
+                    onChange={(e) =>
+                      setFreeOrders(Number(e.target.value) || 20)
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#64748B] mb-1">
+                    Essai Gratuit : Max livreurs
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={freeDrivers}
+                    onChange={(e) =>
+                      setFreeDrivers(Number(e.target.value) || 1)
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#64748B] mb-1">
+                    Essai Gratuit : Dictées vocales
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={freeAiTrials}
+                    onChange={(e) =>
+                      setFreeAiTrials(Number(e.target.value) || 3)
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#64748B] mb-1">
+                    Plan Solo : Max livreurs
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={proDrivers}
+                    onChange={(e) => setProDrivers(Number(e.target.value) || 3)}
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#10B981] hover:bg-[#059669] text-white transition cursor-pointer"
+              >
+                Enregistrer les paramètres
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        /* Onglet 2 : Système & Maintenance */
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Carte Mode Maintenance */}
+            <div
+              className={`rounded-2xl border p-6 shadow-2xs space-y-4 transition ${
                 isMaintenanceMode
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  ? 'bg-amber-50/70 border-amber-300'
+                  : 'bg-white border-slate-200'
               }`}
             >
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  isMaintenanceMode ? 'bg-white animate-pulse' : 'bg-slate-500'
-                }`}
-              />
-              <span>{isMaintenanceMode ? 'ON (ACTIF)' : 'OFF'}</span>
-            </button>
-          </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                      isMaintenanceMode
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <Wrench className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-extrabold text-[#0F172A]">
+                      Mode Maintenance
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      Affiche un écran d&apos;attente aux visiteurs pendant vos
+                      mises à jour.
+                    </p>
+                  </div>
+                </div>
 
-          <div>
-            <label className="block text-xs font-bold text-[#0F172A] mb-1">
-              {lang === 'fr'
-                ? 'Message affiché sur /maintenance'
-                : 'Message displayed on /maintenance'}
-            </label>
-            <textarea
-              rows={2}
-              value={maintenanceMessage}
-              onChange={(e) => setMaintenanceMessage(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-[#0F172A]"
-            />
-          </div>
-
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] font-semibold text-slate-500">
-              platform_settings.is_maintenance_mode
-            </span>
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => handleSavePlatform()}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F172A] hover:bg-slate-800 text-white transition cursor-pointer"
-            >
-              {lang === 'fr' ? 'Mettre à jour le message' : 'Update message'}
-            </button>
-          </div>
-        </div>
-
-        {/* Carte Santé Supabase GET /api/health */}
-        <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div
-                className={`h-10 w-10 rounded-xl flex items-center justify-center ${
-                  health.status === 'ok'
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-rose-50 text-rose-600'
-                }`}
-              >
-                <Activity className="w-5 h-5" />
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleToggleMaintenance}
+                  aria-pressed={isMaintenanceMode}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold transition cursor-pointer ${
+                    isMaintenanceMode
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isMaintenanceMode
+                        ? 'bg-white animate-pulse'
+                        : 'bg-slate-500'
+                    }`}
+                  />
+                  <span>{isMaintenanceMode ? 'ACTIF' : 'DÉSACTIVÉ'}</span>
+                </button>
               </div>
+
               <div>
-                <h2 className="text-base font-extrabold text-[#0F172A]">
-                  {lang === 'fr'
-                    ? 'Santé Système (GET /api/health)'
-                    : 'System Health (GET /api/health)'}
-                </h2>
-                <p className="text-xs text-[#64748B]">
-                  {lang === 'fr'
-                    ? 'Vérification en direct de la connexion PostgreSQL / Supabase'
-                    : 'Live PostgreSQL / Supabase connectivity probe'}
-                </p>
+                <label className="block text-xs font-bold text-[#0F172A] mb-1">
+                  Message affiché aux visiteurs
+                </label>
+                <textarea
+                  rows={2}
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-[#0F172A]"
+                />
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => handleSavePlatform()}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F172A] hover:bg-slate-800 text-white transition cursor-pointer"
+                >
+                  Enregistrer le message
+                </button>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void checkHealth()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${
-                  health.status === 'loading' ? 'animate-spin' : ''
-                }`}
-              />
-              <span>{lang === 'fr' ? 'Tester' : 'Probe'}</span>
-            </button>
-          </div>
+            {/* Carte État du Serveur */}
+            <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                      health.status === 'ok'
+                        ? 'bg-emerald-50 text-emerald-600'
+                        : 'bg-rose-50 text-rose-600'
+                    }`}
+                  >
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-extrabold text-[#0F172A]">
+                      État du Serveur &amp; Base de données
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      Disponibilité du service en temps réel
+                    </p>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-              <p className="text-[11px] font-semibold text-slate-500">
-                Supabase DB
-              </p>
-              <p
-                className={`text-sm font-extrabold mt-0.5 ${
-                  health.supabase === 'connected'
-                    ? 'text-emerald-600'
-                    : 'text-rose-600'
-                }`}
-              >
-                ●{' '}
-                {health.supabase === 'connected'
-                  ? lang === 'fr'
-                    ? 'Connecté'
-                    : 'Connected'
-                  : lang === 'fr'
-                    ? 'Déconnecté'
-                    : 'Disconnected'}
-              </p>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => void checkHealth()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${
+                      health.status === 'loading' ? 'animate-spin' : ''
+                    }`}
+                  />
+                  <span>Actualiser</span>
+                </button>
+              </div>
 
-            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-              <p className="text-[11px] font-semibold text-slate-500">
-                {lang === 'fr' ? 'Latence SQL' : 'SQL Latency'}
-              </p>
-              <p className="text-sm font-extrabold text-[#0F172A] mt-0.5 tabular-nums">
-                {health.latencyMs !== null ? `${health.latencyMs} ms` : '—'}
-              </p>
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5">
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    Base de données
+                  </p>
+                  <p
+                    className={`text-sm font-extrabold mt-0.5 ${
+                      health.supabase === 'connected'
+                        ? 'text-emerald-600'
+                        : 'text-rose-600'
+                    }`}
+                  >
+                    ●{' '}
+                    {health.supabase === 'connected'
+                      ? 'Opérationnelle'
+                      : 'Hors ligne'}
+                  </p>
+                </div>
 
-            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 col-span-2 sm:col-span-1">
-              <p className="text-[11px] font-semibold text-slate-500">
-                Endpoint
-              </p>
-              <a
-                href="/api/health"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-mono font-bold text-[#0284C7] hover:underline mt-1 inline-block"
-              >
-                GET /api/health ↗
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Journaux d'erreurs serveur (system_logs - RLS Admin uniquement) */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-extrabold text-[#0F172A]">
-                {lang === 'fr'
-                  ? 'Journaux Système & Erreurs Serveur (system_logs)'
-                  : 'System & Server Error Logs (system_logs)'}
-              </h2>
-              <p className="text-xs text-[#64748B]">
-                {lang === 'fr'
-                  ? 'Protégé par RLS (visible uniquement par Super Admin).'
-                  : 'Protected by RLS (Admin read-only).'}
-              </p>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5">
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    Temps de réponse
+                  </p>
+                  <p className="text-sm font-extrabold text-[#0F172A] mt-0.5 tabular-nums">
+                    {health.latencyMs !== null ? `${health.latencyMs} ms` : '—'}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={handleTestErrorLog}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
-            >
-              {lang === 'fr' ? '+ Simuler un log' : '+ Log test entry'}
-            </button>
-            {logs.length > 0 && (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={handleClearLogs}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{lang === 'fr' ? 'Vider' : 'Clear'}</span>
-              </button>
+          {/* Journal d'activité & Alertes */}
+          <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#0F172A]">
+                    Journal d&apos;activité &amp; Alertes
+                  </h2>
+                  <p className="text-xs text-[#64748B]">
+                    Historique des événements techniques importants.
+                  </p>
+                </div>
+              </div>
+
+              {logs.length > 0 && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleClearLogs}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Vider le journal</span>
+                </button>
+              )}
+            </div>
+
+            {logs.length === 0 ? (
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-4 py-4 text-xs text-slate-500">
+                 aucune alerte enregistrée récemment.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                {logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-3.5 bg-white hover:bg-slate-50/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-md font-extrabold uppercase text-[10px] ${
+                            log.level === 'critical' || log.level === 'error'
+                              ? 'bg-rose-100 text-rose-800'
+                              : log.level === 'warning'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-sky-100 text-sky-800'
+                          }`}
+                        >
+                          {log.level}
+                        </span>
+                      </div>
+                      <p className="text-slate-900 font-medium">
+                        {log.message}
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                      {new Date(log.created_at).toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
-
-        {logs.length === 0 ? (
-          <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-4 py-4 text-xs text-slate-500">
-            {lang === 'fr'
-              ? 'Aucune erreur serveur récente dans system_logs.'
-              : 'No recent server errors in system_logs.'}
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                className="p-3.5 bg-white hover:bg-slate-50/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
-              >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded-md font-extrabold uppercase text-[10px] ${
-                        log.level === 'critical' || log.level === 'error'
-                          ? 'bg-rose-100 text-rose-800'
-                          : log.level === 'warning'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-sky-100 text-sky-800'
-                      }`}
-                    >
-                      {log.level}
-                    </span>
-                    <span className="font-mono font-bold text-slate-700">
-                      [{log.source}]
-                    </span>
-                  </div>
-                  <p className="text-slate-900 font-medium">{log.message}</p>
-                </div>
-                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
-                  {new Date(log.created_at).toLocaleString('fr-FR')}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 1. Configuration globale du SaaS (platform_settings) */}
-      <form
-        onSubmit={(e) => handleSavePlatform(e)}
-        className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] p-6 shadow-2xs space-y-4"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-[#ECFDF5] text-[#10B981] flex items-center justify-center">
-            <Settings className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-extrabold text-[#0F172A]">
-              Marque &amp; Configuration SaaS (platform_settings)
-            </h2>
-            <p className="text-xs text-[#64748B]">
-              Modifiez le nom et le logo global de la plateforme en temps réel.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-[#0F172A] mb-1">
-              Nom du SaaS *
-            </label>
-            <input
-              type="text"
-              required
-              value={saasName}
-              onChange={(e) => setSaasName(e.target.value)}
-              placeholder="Kaba Kaba"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-[#0F172A] mb-1">
-              URL du Logo SaaS (optionnel)
-            </label>
-            <input
-              type="text"
-              value={saasLogoUrl}
-              onChange={(e) => setSaasLogoUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm text-[#0F172A]"
-            />
-          </div>
-        </div>
-
-        {/* Numéros marchands T-Money & Flooz (affichés dans la modale Paywall In-App) */}
-        <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-[#0F172A]">
-            Numéros Marchands Mobile Money (Modale Paywall In-App)
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-amber-700 mb-1">
-                Numéro Marchand T-Money (Togocom) *
-              </label>
-              <input
-                type="text"
-                required
-                value={tmoneyPhone}
-                onChange={(e) => setTmoneyPhone(e.target.value)}
-                placeholder="+228 90 12 34 56"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-200 text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-sky-700 mb-1">
-                Numéro Marchand Flooz (Moov Africa) *
-              </label>
-              <input
-                type="text"
-                required
-                value={floozPhone}
-                onChange={(e) => setFloozPhone(e.target.value)}
-                placeholder="+228 96 12 34 56"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-sky-50/50 border border-sky-200 text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-          </div>
-          <p className="text-[11px] text-[#64748B]">
-            Ces numéros sont affichés avec copie en 1 clic dans la modale Paywall In-App dès 20 commandes gratuites.
-          </p>
-        </div>
-
-        {/* Quotas par forfait modifiables dans /admin */}
-        <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-[#0F172A]">
-            Quotas par forfait (free_mvp / pro / business)
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-[#64748B] mb-1">
-                Free MVP : Max cmd / mois
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={freeOrders}
-                onChange={(e) => setFreeOrders(Number(e.target.value) || 30)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#64748B] mb-1">
-                Free MVP : Max livreurs
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={freeDrivers}
-                onChange={(e) => setFreeDrivers(Number(e.target.value) || 1)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#64748B] mb-1">
-                Free MVP : Essais IA (Audio/Texte)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={freeAiTrials}
-                onChange={(e) => setFreeAiTrials(Number(e.target.value) || 3)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#64748B] mb-1">
-                Forfait Pro : Max livreurs
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={proDrivers}
-                onChange={(e) => setProDrivers(Number(e.target.value) || 3)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-sm font-bold text-[#0F172A]"
-              />
-            </div>
-          </div>
-          <p className="text-[11px] text-[#64748B]">
-            Forfait Pro : commandes &amp; IA illimitées • Forfait Business :
-            tout illimité + rôle employee + export CSV.
-          </p>
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#10B981] hover:bg-[#059669] text-white transition cursor-pointer"
-          >
-            Enregistrer platform_settings
-          </button>
-        </div>
-      </form>
-
-      {/* 2. Demandes d'upgrade Mobile Money (subscription_requests) */}
-      <div className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-[#F0F9FF] text-[#0284C7] flex items-center justify-center">
-              <Smartphone className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-extrabold text-[#0F172A]">
-                Demandes d&apos;Upgrade Mobile Money (subscription_requests)
-              </h2>
-              <p className="text-xs text-[#64748B]">
-                Validez les références T-Money / Flooz envoyées par les
-                vendeurs.
-              </p>
-            </div>
-          </div>
-          <span className="badge-status badge-pending">
-            {reqList.filter((r) => r.status === 'pending').length} en attente
-          </span>
-        </div>
-
-        {reqList.length === 0 ? (
-          <p className="text-xs text-[#64748B] py-3">
-            Aucune demande d&apos;upgrade Mobile Money en attente.
-          </p>
-        ) : (
-          <div className="space-y-2.5">
-            {reqList.map((req) => (
-              <div
-                key={req.id}
-                className="rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-              >
-                <div>
-                  <p className="text-sm font-extrabold text-[#0F172A]">
-                    {req.storeName} → Forfait{' '}
-                    <span className="text-[#10B981] uppercase">
-                      {req.requested_plan}
-                    </span>
-                  </p>
-                  <p className="text-xs text-[#64748B]">
-                    Réf. T-Money/Flooz :{' '}
-                    <strong className="font-mono text-[#0F172A]">
-                      {req.mobile_money_ref}
-                    </strong>{' '}
-                    • Tél : {req.phone}
-                  </p>
-                </div>
-
-                {req.status === 'pending' ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => handleDecision(req, 'approved')}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#10B981] text-white cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Valider</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => handleDecision(req, 'rejected')}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Rejeter</span>
-                    </button>
-                  </div>
-                ) : (
-                  <span
-                    className={`badge-status ${
-                      req.status === 'approved'
-                        ? 'badge-delivered'
-                        : 'badge-discrepancy'
-                    }`}
-                  >
-                    ● {req.status === 'approved' ? 'Approuvée' : 'Rejetée'}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 3. Tableau paginé des vendeurs abonnés (.range() + count: 'exact', 20/page) */}
-      <StoresManagementTable
-        stores={stores}
-        currentPage={currentPage}
-        totalCount={totalStoresCount ?? stores.length}
-        pageSize={pageSize}
-        basePath="/admin"
-        lang={lang}
-      />
+      )}
     </div>
   )
 }
